@@ -4,7 +4,7 @@
 | --- | --- |
 | Partner | GoodLeap (Gauntlet AI partner project, Silver tier) |
 | Brief version | 1, last updated 2026-10-20 |
-| PRD status | Draft, 2026-10-28. Consolidates the sources below. Open questions in [§13](#13-open-questions-and-ambiguities) are not yet resolved. |
+| PRD status | Draft, 2026-10-28. Consolidates the sources below. The open questions in [§13](#13-open-questions-and-ambiguities) were resolved on 2026-10-28; the resolutions are recorded at the end of that section and detailed in the [concept brief](designs/loan-assistant-concept.md). |
 | Sources | [Portal brief](source/portal-brief.md) (**[P]**) · Take-home challenge PDF attached to the brief, marked Confidential and not committed (**[T]**) |
 
 Each requirement cites its source. Where the two sources disagree, both values are recorded and the
@@ -248,3 +248,28 @@ To be resolved during requirements alignment.
   one?
 - **Q-16 Confidentiality.** The take-home PDF is marked Confidential. What visibility is allowed
   for the submission repository?
+
+### Resolutions (2026-10-28)
+
+Resolved in the brainstorm and Goldfish review round. Details and rationale are in the
+[concept brief](designs/loan-assistant-concept.md); the review findings are in
+[loan-assistant-concept-goldfish-findings.md](designs/loan-assistant-concept-goldfish-findings.md).
+
+| Question | Resolution |
+| --- | --- |
+| Q-1 Time budget | The deadline is the morning of 2026-10-29. The design document is the primary deliverable; the prototype is a working product demo of one path through each feature, simplified where the design says so. Feature 1 and the shared base are built first; feature 2 is built at reduced depth after it, and whatever is unfinished ships as design-only. |
+| Q-2 Deliverable set | "Technical Documentation" is the design document plus the README's architecture section and three short supporting files (audit event schema, eval specification, state vocabulary). Nothing beyond that. |
+| Q-3 Deployment Guide | The README's local run instructions, plus a description of deployment on the existing ECS, RDS, S3 and SQS stack folded into the design document's architecture section. No hosted deployment. |
+| Q-4 Repository host | GitLab (`labs.gauntletai.com`), the existing remote. A GitHub mirror only if the portal requires one. Settled. |
+| Q-5 Metric wording | [T]'s reading: 10 minutes is the completion-time benchmark; 38% is the abandonment rate. |
+| Q-6 Solution angle | Both named drop-off steps. Feature 1: a contractor-facing application copilot beside the form (product and promo explanation, deterministic payment options, quote-verified field proposals, a homeowner view with templated disclosures). Feature 2: backend document extraction with bounding-box provenance and internal human review of every value. |
+| Q-7 Primary user and surface | Contractor-facing. Borrower-facing is a declared surface: the full-screen homeowner view carries the disclosure template; contractor chat passes the same guardrail, and chat replies containing a payment figure carry a one-line estimate footer. |
+| Q-8 Auditability in the prototype | Yes. An append-only audit event stream with correlation ids and a versions block on every event, shown in the prototype as a per-application JSON page; the card-first timeline is described in the design. |
+| Q-9 Loan product data | An invented three-product catalog described by mechanic type (fixed, 0% introductory, deferred interest) with explicit mechanics; the calculator keys on mechanic. |
+| Q-10 Disclosure fidelity | TILA as the four-cell box per option (APR, finance charge, amount financed, total of payments) with the payment schedule beneath and the estimate statement under the payment figure; RESPA as one conditional line for home-secured loans. Placeholder wording; Compliance owns the final text. |
+| Q-11 AI usage documentation | A short note at `docs/ai-usage.md`. |
+| Q-12 LLM key for reviewers | Anthropic, dated model ids pinned per use case. Reviewers supply their own key in `.env` from a committed `.env.example`; the app starts without a key and says so. |
+| Q-13 Other stack pieces | Design-document material. Jira Service Management is mocked by a client whose calls are logged; Zapier is kept out of the review hand-off's critical path; Snowflake receives metrics; Microsoft 365 is not involved. |
+| Q-14 Frontend | A React web app (Vite) served by the Node backend, with three role tabs and no login. |
+| Q-15 Abandonment target | No numeric commitment. The design states a measurement plan: the per-contractor rollout allowlist is the control group, measured on completion time and abandonment at the product-selection step from the existing Snowflake funnel. |
+| Q-16 Confidentiality | Parked for the recruiter. The PDF and its text stay uncommitted. |

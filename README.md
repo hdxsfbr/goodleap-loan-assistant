@@ -10,9 +10,11 @@ updated 2026-10-20).
 
 ## Status
 
-Requirements phase. The brief and its attachment are consolidated into [the PRD](docs/PRD.md); the
-open questions in its last section are being resolved before design and implementation start. There
-is no runnable code yet. Setup and run instructions will be added here with the prototype.
+Concept phase. The brief and its attachment are consolidated into [the PRD](docs/PRD.md). Its open
+questions were resolved in a brainstorm and review round on 2026-10-28; the outcome is the
+[concept brief](docs/designs/loan-assistant-concept.md), published for feedback before the formal
+design document is drafted. There is no runnable code yet. Setup and run instructions will be added
+here with the prototype.
 
 ## The problem
 
@@ -45,7 +47,10 @@ The business case: 10% more contractor deal closures is worth about $200M a year
 
 ```
 docs/
-  PRD.md                      Consolidated requirements, metrics, rubric and open questions
+  PRD.md                      Consolidated requirements, metrics, rubric, open questions and their resolutions
+  designs/
+    loan-assistant-concept.md                     Concept brief (RFC): the two features, decisions, scope, alternatives
+    loan-assistant-concept-goldfish-findings.md   Review findings the brief responds to
   source/
     portal-brief.md           Project brief from the Gauntlet portal
 ```
