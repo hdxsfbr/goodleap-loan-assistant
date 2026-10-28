@@ -144,7 +144,7 @@ shown, with a content hash and pointers to the events that produced it), `docume
 `extraction.completed`, `review.decision`, `discrepancy.raised` / `discrepancy.resolved`,
 `application.state_changed` and `context.compacted`. Every event carries a versions block stamped
 at process start: git sha, copilot prompt, judge prompt, deny-list, disclosure template, catalog
-snapshot (the product objects stored by value), calculator, model id (exact dated string),
+snapshot (the product objects stored by value), calculator, model id (the exact published id, never an alias),
 tolerance table, OCR engine. Replay means recomputing the calculator and the template from stored
 inputs and asserting equality; model text is stored verbatim and never regenerated. The compliance
 query path is: filter by application and `card.rendered`, then follow parent pointers back.
@@ -322,7 +322,7 @@ and the templated disclosures depend on no model text and need no judge, so they
 the tool call returns; only the prose waits behind the judge. A "Show payment options" button
 calls the calculator directly with no model in the loop, so the promise holds during an outage.
 Suggested one-tap prompts seed the panel; a stepwise status line mirrors the pipeline. The judge
-runs on a Haiku-class model with a classification-only prompt; prompt caching covers the fixed
+runs on Haiku 5.5 with a classification-only prompt; prompt caching covers the fixed
 prefix (rules, catalog, tool schemas).
 
 **Context window.** Confirmed and pending fields live as structured state outside the transcript
@@ -421,8 +421,9 @@ string match.
 React, TypeScript) and `server/` (Express, TypeScript run with tsx), `npm run dev` runs both, the
 API and the static frontend served from one process, pinned Node version. Anthropic SDK with tool
 use for the copilot (tools: `get_products`, `calculate_payment`, `propose_field_fill`,
-`build_homeowner_view`) and one JSON-schema-constrained extraction call per document validated
-with zod. A dated Sonnet-class model for copilot and extraction, a Haiku-class model for the judge.
+`request_homeowner_view`, a signal only; the server composes the view) and one
+JSON-schema-constrained extraction call per document validated with zod. Sonnet 5.5 for the
+copilot, Opus 5.5 for extraction, Haiku 5.5 for the judge, each pinned by its exact published id.
 react-pdf for the viewer with boxes as positioned elements scaled by the rendered viewport;
 pdfjs-dist text content server-side for text PDFs. vitest. No database, no Docker, no Next.js, no
 native modules. In-memory state seeded from a committed seed file; every mutation appends to an
@@ -502,7 +503,7 @@ The README calls the scenario a "demo walkthrough".
     confirm proposed fields, submit) and, if built, through document review (open the task, see
     the boxes and the one not-located value, confirm or flag, see one discrepancy with its
     templated question).
-  * The guardrail: a versioned deny-list of verdict terms with an allow-list, a Haiku-class judge
+  * The guardrail: a versioned deny-list of verdict terms with an allow-list, a Haiku 5.5 judge
     for nuance and pressure language, and a deterministic number-match check, all under one
     contract with logged verdicts, regenerate-once-then-fallback behavior, a visible marker, and a
     fixed out-of-scope reply. Tests: must-block and must-pass strings including the rendered
@@ -601,7 +602,8 @@ The README calls the scenario a "demo walkthrough".
 7. The pay stub sample is an image PDF with its positioned text computed once and committed; the
    estimate and scope letter samples are text PDFs read by pdf.js. Both adapters produce the same
    representation with fraction coordinates.
-8. Provider: Anthropic, one import site, dated model ids pinned per use case. Reviewers supply
+8. Provider: Anthropic, one import site, exact published model ids pinned per use case (Sonnet 5.5
+   copilot, Opus 5.5 extraction, Haiku 5.5 judge), never an alias. Reviewers supply
    their own key in `.env`; `.env.example` is committed; without a key the app starts and says so.
 9. The deny-list holds verdict terms only, is versioned JSON owned by Compliance, and is the floor
    the judge cannot lower. A trip regenerates once, then falls back to Compliance-owned text with

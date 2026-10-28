@@ -268,7 +268,7 @@ Resolved in the brainstorm and Goldfish review round. Details and rationale are 
 | Q-9 Loan product data | An invented three-product catalog described by mechanic type (fixed, 0% introductory, deferred interest) with explicit mechanics; the calculator keys on mechanic. |
 | Q-10 Disclosure fidelity | TILA as the four-cell box per option (APR, finance charge, amount financed, total of payments) with the payment schedule beneath and the estimate statement under the payment figure; RESPA as one conditional line for home-secured loans. Placeholder wording; Compliance owns the final text. |
 | Q-11 AI usage documentation | A short note at `docs/ai-usage.md`. |
-| Q-12 LLM key for reviewers | Anthropic, dated model ids pinned per use case. Reviewers supply their own key in `.env` from a committed `.env.example`; the app starts without a key and says so. |
+| Q-12 LLM key for reviewers | Anthropic: Sonnet 5.5 for the copilot, Opus 5.5 for extraction, Haiku 5.5 for the judge, each pinned by its exact published id. Reviewers supply their own key in `.env` from a committed `.env.example`; the app starts without a key and says so. |
 | Q-13 Other stack pieces | Design-document material. Jira Service Management is mocked by a client whose calls are logged; Zapier is kept out of the review hand-off's critical path; Snowflake receives metrics; Microsoft 365 is not involved. |
 | Q-14 Frontend | A React web app (Vite) served by the Node backend, with three role tabs and no login. |
 | Q-15 Abandonment target | No numeric commitment. The design states a measurement plan: the per-contractor rollout allowlist is the control group, measured on completion time and abandonment at the product-selection step from the existing Snowflake funnel. |

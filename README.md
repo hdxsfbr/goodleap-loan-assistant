@@ -51,6 +51,9 @@ docs/
   designs/
     loan-assistant-concept.md                     Concept brief (RFC): the two features, decisions, scope, alternatives
     loan-assistant-concept-goldfish-findings.md   Review findings the brief responds to
+    loan-assistant-design.md                      Internal design: architecture, data flows, alternatives, file-by-file implementation plan
+    review/                                       Goldfish review reports on the design (stages 5 to 9)
+  design-document.md          The 2 to 3 page submission document, condensed from the internal design
   source/
     portal-brief.md           Project brief from the Gauntlet portal
 ```
