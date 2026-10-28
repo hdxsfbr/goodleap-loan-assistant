@@ -5,19 +5,19 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 16:26 PDT
+Last updated: 2026-10-28 17:08 PDT
 
 ## Waves
 
 | Wave | Design step | Covers | Status | Commit |
 | --- | --- | --- | --- | --- |
-| 1A | 0 | `samples/` (three PDFs, OCR file, ground truth) and `scripts/samples/` (items 65 to 67, 69 to 71) | done; spot-checked | pending with wave 1 |
-| 1B | 1 | Skeleton: root config, `shared/`, store, commands, audit log, routes, mocks, placeholder web, `tests/commands.test.ts` (items 1 to 7, 9, 10, 11 reason codes, 12 to 20, 21a routes, 48a, 49, 50a, 51, 65) | done; build, 51 tests and boot verified by me | pending with wave 1 |
-| 1 close | - | Build, `npm test`, `/api/healthz`, create `.env` from the OpenRouter key, one codex review, filtered fix pass, commit, push | **running**: review filtered, fix pass in progress | - |
-| 2 | 2 | Calculator, catalog, disclosure template, surface types, golden tests (items 30 to 33, 74, 76) | built; 92 tests pass; five golden cases exact to the cent; **codex review running** | - |
-| 3 | 3 | Copilot end to end: smoke script run first (73), server (22, 24 to 29, 34 to 38), web panel and homeowner view (52 to 57, 63, 64), tests (75, 77, 80, 81); CUJs 1 to 3 run | not started | - |
+| 1A | 0 | `samples/` (three PDFs, OCR file, ground truth) and `scripts/samples/` (items 65 to 67, 69 to 71) | done | `996ec3c` |
+| 1B | 1 | Skeleton: root config, `shared/`, store, commands, audit log, routes, mocks, placeholder web, `tests/commands.test.ts` (items 1 to 7, 9, 10, 11 reason codes, 12 to 20, 21a routes, 48a, 49, 50a, 51, 65) | done | `996ec3c` |
+| 1 close | - | Build, `npm test`, `/api/healthz`, create `.env` from the OpenRouter key, one codex review, filtered fix pass, commit, push | done: 15 fixes, 139 tests, pushed to GitLab `main` | `996ec3c` |
+| 2 | 2 | Calculator, catalog, disclosure template, surface types, golden tests (items 30 to 33, 74, 76) | done: 6 fixes, 157 tests, pushed | see git log |
+| 3 | 3 | Copilot end to end: 3A server (21a homeowner-view route, 22, 24 to 29, 34 to 38, 73, tests 75, 80, 81) and 3C web (52 to 57, 62 pulled forward from wave 4, 63, 64) | **running** as two Sonnet agents in parallel with the wave 2 fix pass | - |
 | 4 | 4 | README walkthrough (8), audit view (62), docs (82, 84, 85); CUJs 6 and 7 run | not started | - |
-| 5 | 5 | Document extraction and review: schemas (11), 21b, 23, 25b, 39 to 47, 48b, 50b, 58 to 61, recorded fixture (68), tests (78, 79), 83; CUJs 4 and 5 run | not started | - |
+| 5 | 5 | Document extraction and review: 5A server (11, 23, 25b, 39 to 47, 48b, 50b, 68, 78, 79; **running**, Sonnet, in parallel with wave 3 since its files are disjoint; the 21b hook and the router mount are applied by me after wave 3A lands) then 5B reviewer web (58 to 61) after 3C; 83 in wave 6 | **running** | - |
 | 6 | 6 | Eval runner (72) and judge cases, submission doc built-versus-described (86) and final trim, final README pass | not started | - |
 
 Each wave closes the same way: I build and run the suite myself, one independent codex review
@@ -42,6 +42,8 @@ GitLab `main`.
   `tests/commands.test.ts` and an extra `tests/foundation.test.ts`.
 * Verified by me: `npm run build` exit 0, `npm test` 51 passed, boot on port 3457 with
   `/api/healthz` answering (port 3000 is taken on this machine by an unrelated server).
+* The commit `996ec3c` was also built and tested standalone in a throwaway worktree: build
+  exit 0, 98 tests (the wave 2 test files were not part of it).
 * Agent additions beyond the plan, kept: `server/api/http.ts` helpers, `CommandError`,
   `audit.emit`, four event types the plan named but never typed (`application.submitted`,
   `options.stored`, `options.explained`, `review.started`), a `canvas` override in
@@ -108,6 +110,52 @@ Dropped:
   ("18 months", "102 months") so the disclosure lines pass the number-match check.
 * One edit outside the brief, accepted: a `tests/foundation.test.ts` case that asserted an
   unwired catalog now calls the mock directly with no source.
+
+### Wave 2 review (codex, gpt-6.1, 8 findings)
+
+Kept, going to the fix pass:
+
+1. (1) The level payment was computed on floats and then rounded, so an exact half-cent tie
+   could land on the wrong side (350 cents at 12% over one month: 353 instead of 354). Now an
+   exact BigInt rational, rounded half-even.
+2. (2) `composeHomeownerView` checked the disclosure block against the options by product ids
+   only; it now re-renders the canonical block and requires deep equality.
+3. (3) The catalog's fixed-product sentence says "ten years"; under a `term_months` override the
+   homeowner view now uses a term-aware Compliance-owned variant.
+4. (4) Catalog terms and rates are bounded before pricing (`catalog.schema_mismatch`).
+5. (5) Duplicate product ids in a catalog are rejected.
+6. (8) The years token is emitted for fractional-year terms too ("7.5 years").
+
+Dropped:
+
+* (6) "Deferred option should use the two-part schedule line": contradicts the decision recorded
+  in design item 32 (single-form line plus the consequence line).
+* (7) "The template must not call `monthsAfterPromo`": the template does no arithmetic itself;
+  reading a count from the calculator is the recorded reading of item 32.
+
+### Wave 2 fix pass
+
+* All six fixes landed with tests; the five golden cases still match to the cent. The agent also
+  moved the monthly-interest product to BigInt after finding that the largest amount at the
+  largest APR overflowed a float.
+* Known and left open: for a one-month loan an exact half-cent tie on an odd principal makes the
+  exact-rational level payment differ by one cent from the schedule's single payment (75 cents at
+  8% gives 76 against 75); the catalog's APRs never hit that case. The years token for 12 months
+  reads "1 years", the form the normalizer canonicalises to.
+* Passed to wave 3A: the normalizer does not tokenize decimal years ("7.5 years"), so
+  number-match must learn that pattern; `CANNED_SENTENCE` for a fixed option under a term
+  override must use `fixedSentenceForTerm`.
+* `FIXED_SENTENCE_FOR_TERM` added to the design's fixed-texts table.
+
+### Wave 3
+
+* 3A (server) and 3C (web) run in parallel against the contract in `shared/schemas.ts`; the
+  audit view (item 62) was pulled forward from wave 4 into 3C because its API already exists.
+* Carried from the wave 1 fix pass for 3A: values handed to `withToolCall` and `withMock` must
+  be JSON-clean (the audit schema now rejects `undefined`, `Date`, `NaN`).
+* Left open from the wave 1 fix pass, minor: `/api/reset` duplicates the seed schema because
+  `store.ts` does not export it; `PORT=abc` in `.env` falls back differently in the server and
+  the Vite proxy.
 
 ## Decisions made during the build
 

@@ -1,5 +1,6 @@
 import type { MockEnvelope, ToolService } from "@shared/schemas";
 import { audit, type Ctx } from "../audit-log.js";
+import { CATALOG } from "../domain/catalog.js";
 import { createCatalogMock } from "./catalog/mock.js";
 import { createContractorProfileMock } from "./contractor-profile/mock.js";
 import { CreditEngineStub } from "./credit-engine/stub.js";
@@ -33,7 +34,7 @@ export interface Services {
 }
 
 export const services: Services = {
-  catalog: createCatalogMock(),
+  catalog: createCatalogMock(() => CATALOG),
   creditEngine: new CreditEngineStub(),
   plaid: new PlaidStub(),
   contractorProfile: createContractorProfileMock(),
