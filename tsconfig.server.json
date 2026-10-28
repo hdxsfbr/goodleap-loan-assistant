@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["server/", "shared/", "tests/", "scripts/*.ts"],
+  "exclude": ["scripts/samples/**", "node_modules", "dist"]
+}

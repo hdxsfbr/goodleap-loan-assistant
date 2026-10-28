@@ -1,0 +1,23 @@
+{
+  "name": "goodleap-loan-assistant-sample-tooling",
+  "private": true,
+  "type": "module",
+  "description": "One-time tooling that produces the committed sample documents and the pay stub OCR fixture. Not part of the root install.",
+  "scripts": {
+    "generate": "tsx generate.ts",
+    "ocr": "tsx ocr-paystub.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "verify": "tsx verify.ts"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.13",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
+    "tesseract.js": "^7.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
+}

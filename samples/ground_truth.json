@@ -1,0 +1,25 @@
+{
+  "pay_stub": {
+    "employer_name": { "value": "Pinecrest Harbor Logistics" },
+    "pay_period_start": { "value": "10/05/2026", "iso": "2026-10-05" },
+    "pay_period_end": { "value": "10/18/2026", "iso": "2026-10-18" },
+    "pay_frequency": { "value": "Biweekly", "normalized": "biweekly" },
+    "gross_pay": { "value": "2,350.00", "cents": 235000 },
+    "net_pay": { "value": "1,812.40", "cents": 181240 },
+    "ytd_gross": { "value": "49,350.00", "cents": 4935000 },
+    "annualized_income": { "value": "61,100.00", "cents": 6110000, "derived": true }
+  },
+  "estimate": {
+    "contractor_name": { "value": "Calderbrook Roofing" },
+    "project_description": { "value": "Full roof replacement with architectural composition shingles" },
+    "estimate_date": { "value": "September 14, 2026", "iso": "2026-09-14" },
+    "total_amount": { "value": "$31,000.00", "cents": 3100000 },
+    "line_item_count": { "value": "4", "integer": 4 }
+  },
+  "scope_letter": {
+    "property_address": { "value": "2217 Marlow Court, San Jose, CA 95112" },
+    "scope_summary": { "value": "Complete tear-off and re-roof with architectural shingles" },
+    "start_date": { "value": "November 9, 2026", "iso": "2026-11-09" },
+    "contractor_name": { "value": "Calderbrook Roofing" }
+  }
+}

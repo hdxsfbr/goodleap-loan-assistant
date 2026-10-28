@@ -491,10 +491,15 @@ types:
   tool.call          { service, method, input, output, options_id?, _mock?: { service, fixture_id, mock_version }, latency_ms }
   guardrail.verdict  { layer: "denylist" | "number_match" | "judge", verdict, matched_terms? | rationale?,
                        outcome: "pass" | "blocked" | "judge_unavailable", latency_ms }
-  field.proposed     { proposal_id, field_key, value, source }
-  field.edited       { proposal_id, before, after, review_task_id? }
-  field.confirmed    { proposal_id, final_value, located_by_reviewer?, review_task_id?, elapsed_ms? }
-  field.rejected     { proposal_id, reason_code, review_task_id? }
+  field.proposed     { proposal_id, field_key, value, source, dropped_reason?: "equals_confirmed" | "field_not_fillable" | "quote_not_verified",
+                       superseded_proposal_ids }
+  field.edited       { proposal_id, field_key, before, after, review_task_id?, elapsed_ms?, note? }
+  field.confirmed    { proposal_id, field_key, final_value, source: "typed" | "proposal", located_by_reviewer?, review_task_id?, elapsed_ms?, note? }
+  field.rejected     { proposal_id, field_key, reason_code, review_task_id?, elapsed_ms?, note? }
+  application.submitted { fields (the snapshot submitted), document_ids }
+  options.stored     { options_id, inputs_source, product_ids }
+  options.explained  { options_id, text }
+  review.started     { task_id }
   view.rendered      { surface: "homeowner_view", options_id, props (complete), content_sha256, produced_by: [event_id] }
   document.attached  { document_id, slot, adapter }            (emitted by the attachDocument command only)
   extraction.completed { document_id, extraction_status, per_field: [{ field_key, match_method, adapter }], error_code? }
@@ -722,6 +727,19 @@ Prompt caching: the copilot's system prompt and tool definitions are the stable 
 follow it. No timestamps or ids in the prefix. The audit event records `cache_read_input_tokens`
 so a zero across repeated turns is visible. The extraction prompt is not cached: each document
 type has its own schema, and one application runs each once.
+
+**Verified API behaviors (2026-10-28, through OpenRouter's Anthropic-compatible endpoint at
+`https://openrouter.ai/api/v1/messages` with the ids `anthropic/claude-sonnet-5.5`,
+`anthropic/claude-opus-5.5` and `anthropic/claude-haiku-5.5`; the author's key is an OpenRouter key,
+so the prototype runs against that endpoint and the README says how to use either key kind):**
+(1) a `strict: true` tool with `tool_choice: auto` and `output_config.effort: "low"` on Sonnet 5.5
+returned one `tool_use` with exact integer arguments, including "$30K" converted to 3000000
+cents; (2) `output_config.format` with a JSON schema on Haiku 5.5 returned conforming JSON; (3) a
+`cache_control` breakpoint on the system block produced 2,472 cached tokens read back on the
+second call; (4) the SDK's default `x-api-key` header is accepted. Forced tool choice, prefill
+and citations were not exercised because the design does not use them. The SDK is pointed at the
+endpoint by `ANTHROPIC_BASE_URL`, which it reads from the environment, so the single import site
+is unchanged.
 
 Safety-classifier refusals (`stop_reason: "refusal"`) are mapped to the error code `llm.refusal`
 and handled like a block: the fallback text is shown and the event is logged. No server-side
@@ -1504,15 +1522,17 @@ template (item 32) and is the single source for prompts, tests and the submissio
 
 *   **Layer / kind**: Test configuration.
 *   **Proposed Changes**: Node environment, `tests/**/*.test.ts`, the `@shared` alias, and
-    `setupFiles: ["tests/setup.ts"]`, which runs `try { process.loadEnvFile() } catch {}` so a
-    test that needs `ANTHROPIC_API_KEY` finds it; such a test skips with a printed reason when
-    the variable is absent.
+    `setupFiles: ["tests/setup.ts"]`, which loads `.env` the same way item 13 does (overriding
+    the shell) so a test that needs `ANTHROPIC_API_KEY` finds it; such a test skips with a
+    printed reason when the variable is absent.
 
 ##### 5. `.env.example` (Create)
 
 *   **Layer / kind**: Configuration template.
 *   **Proposed Changes**: `ANTHROPIC_API_KEY=` (blank, with a comment naming where to get one),
-    `PORT=3000`, `COPILOT_ENABLED=true`, `EXTRACTION_ENABLED=true`. No other variables exist.
+    `PORT=3000`, `COPILOT_ENABLED=true`, `EXTRACTION_ENABLED=true`, and `ANTHROPIC_BASE_URL=`
+    (blank by default; set to `https://openrouter.ai/api/v1` to use an OpenRouter key). No other
+    variables exist.
 
 ##### 6. `.nvmrc` (Create)
 
@@ -1667,8 +1687,13 @@ template (item 32) and is the single source for prompts, tests and the submissio
 ##### 13. `server/index.ts` (Create)
 
 *   **Layer / kind**: Process entry.
-*   **Proposed Changes**: `try { process.loadEnvFile() } catch {}`; `mkdirSync("data", {
-    recursive: true })`; build the composition root; seed the store; mount the API; if `dist/web`
+*   **Proposed Changes**: load `.env` when it exists by parsing it with `util.parseEnv` and
+    assigning every entry into `process.env`, overriding variables the shell already exports (a
+    stale `ANTHROPIC_BASE_URL` in a developer's shell must not silently redirect the key; the
+    rule is stated in `.env.example`); `mkdirSync("data", { recursive: true })`; open
+    `data/audit.jsonl` truncated (the store is in memory and reseeded at every boot, so a file
+    kept from the last run would attach that run's events to the freshly seeded application
+    id; production uses the INSERT-only table of section 10); build the composition root; seed the store; mount the API; if `dist/web`
     exists, serve it with `express.static` and the history fallback `app.get("/{*splat}", ...)`
     (Express 5 syntax); start on `PORT`. Log the versions block and whether a key is present
     (never the key) at boot.
@@ -1676,8 +1701,11 @@ template (item 32) and is the single source for prompts, tests and the submissio
 ##### 14. `server/config.ts` (Create)
 
 *   **Layer / kind**: Server configuration.
-*   **Proposed Changes**: Reads the four variables with defaults (`PORT` 3000; both flags true
-    when absent); exposes `hasLlmKey`, `copilotEnabled`, `extractionEnabled`. Per use case, the
+*   **Proposed Changes**: Reads the five variables with defaults (`PORT` 3000; both flags true
+    when absent; `ANTHROPIC_BASE_URL` unset); exposes `hasLlmKey`, `llmBaseUrl`, `copilotEnabled`,
+    `extractionEnabled`, and the effective model ids: the plain pinned ids, or, when the base URL
+    contains `openrouter.ai`, the OpenRouter forms `anthropic/claude-sonnet-5.5`,
+    `anthropic/claude-opus-5.5`, `anthropic/claude-haiku-5.5`. Per use case, the
     pinned model id, effort, `max_tokens` and SDK options: copilot `claude-sonnet-5-5`, `low`,
     4096, `{ timeout: 15_000, maxRetries: 0 }`; extraction `claude-opus-5-5`, `medium`, 4096,
     `{ timeout: 60_000, maxRetries: 1 }`; judge `claude-haiku-5-5`, `low`, 1024, `{ timeout:
@@ -1842,7 +1870,8 @@ template (item 32) and is the single source for prompts, tests and the submissio
 ##### 24. `server/llm/client.ts` (Create)
 
 *   **Layer / kind**: The single SDK import site.
-*   **Proposed Changes**: Constructs `new Anthropic({ maxRetries: 0 })` once if a key is present.
+*   **Proposed Changes**: Constructs `new Anthropic({ maxRetries: 0 })` once if a key is present;
+    the SDK reads `ANTHROPIC_BASE_URL` itself, so no base URL is passed in code.
     Three functions, each taking `ctx` so the event it appends carries `application_id`,
     `session_id`, `turn_id` and `parent_event_id`: `copilotCall(ctx, { system, messages, tools
     })` (`client.messages.create`), `extractCall(ctx, { prompt, outputSchema })`
@@ -1998,7 +2027,12 @@ template (item 32) and is the single source for prompts, tests and the submissio
     the consequence line "If the balance is not paid in full by month {promo}, {interest_added}
     of interest is added and the payment becomes {payment} for the remaining {months} months."
     `renderChatFooter()` returns `CHAT_FOOTER`. The template's version is its file hash. Uses only
-    `shared/format.ts`; no arithmetic.
+    `shared/format.ts`; no arithmetic (the month count after a promotion comes from the
+    calculator's `monthsAfterPromo`). Two rendering decisions: the APR cell of a promotional
+    product shows the standard APR (12.99%, 17.99%), with the promotional rate in the schedule
+    line, since no blended APR is defined; and a `deferred_interest` option uses the single-form
+    schedule line ("12 monthly payments of $2,500.00", the paid-in-full plan) followed by the
+    consequence line, because item 31 defines no promotional payment for it.
 *   **Tested by**: item 76.
 
 ##### 33. `server/domain/surfaces.ts` (Create)

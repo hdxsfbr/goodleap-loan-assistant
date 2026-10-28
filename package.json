@@ -1,0 +1,44 @@
+{
+  "name": "goodleap-loan-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI assistant for home improvement loan applications (take-home prototype).",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "vite build && tsx server/index.ts",
+    "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
+    "build": "tsc --noEmit -p tsconfig.server.json && tsc --noEmit -p tsconfig.web.json && vite build",
+    "test": "vitest run",
+    "eval": "tsx scripts/eval.ts",
+    "eval:judge": "tsx scripts/eval.ts --judge",
+    "smoke:api": "tsx scripts/smoke-api.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "express": "^5",
+    "pdfjs-dist": "4.8.69",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-pdf": "^9",
+    "react-router-dom": "^6",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/express": "^5",
+    "@types/node": "^22",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4",
+    "concurrently": "^10.0.6",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vite": "^5",
+    "vitest": "^2"
+  },
+  "overrides": {
+    "canvas": "npm:empty-npm-package@1.0.0"
+  }
+}

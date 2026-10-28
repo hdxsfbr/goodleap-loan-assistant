@@ -1,0 +1,18 @@
+{
+  "contractors": [
+    { "id": "ctr_demo_001", "name": "Marcus Tillman", "company": "Tillman Roofing & Solar" }
+  ],
+  "reviewers": [
+    { "id": "rev_demo_001", "name": "Priya Raman" }
+  ],
+  "applications": [
+    {
+      "id": "app_demo_001",
+      "contractor_id": "ctr_demo_001",
+      "status": "draft",
+      "fields": {},
+      "verified": { "verified_annual_income": null, "verification_source": null },
+      "document_ids": []
+    }
+  ]
+}
