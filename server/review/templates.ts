@@ -22,6 +22,24 @@ export const FLAG_REASON_LABELS: Readonly<Record<FlagReason, string>> = {
   other: "Other",
 };
 
+/**
+ * Flag reasons only the system writes. The review path rejects a calculated value with
+ * `pay_frequency_not_located` when the pay frequency it needs is missing (server/review/derived.ts),
+ * so a reviewer is never offered it: they flag the pay frequency row itself, and the system does the rest.
+ */
+export const SYSTEM_ONLY_FLAG_REASONS = ["pay_frequency_not_located"] as const satisfies readonly FlagReason[];
+
+/** A flag reason a reviewer may choose. */
+export type ReviewerFlagReason = Exclude<FlagReason, (typeof SYSTEM_ONLY_FLAG_REASONS)[number]>;
+
+/** The labels of the reasons a reviewer may flag a value with, in the order the screen lists them. */
+export function reviewerFlagReasonLabels(): Record<ReviewerFlagReason, string> {
+  const system: readonly string[] = SYSTEM_ONLY_FLAG_REASONS;
+  return Object.fromEntries(
+    Object.entries(FLAG_REASON_LABELS).filter(([code]) => !system.includes(code)),
+  ) as Record<ReviewerFlagReason, string>;
+}
+
 function money(value: unknown): string {
   if (typeof value !== "number") throw new TypeError("A clarification question needs two money values in cents.");
   return formatMoney(value);

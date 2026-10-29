@@ -773,7 +773,15 @@ export function setExtractionStatus(
   document_id: string,
   status: ExtractionStatus,
   detail: {
-    per_field?: Array<{ field_key: string; match_method: MatchResult["method"]; adapter: DocumentAdapter }>;
+    per_field?: Array<{
+      field_key: string;
+      match_method: MatchResult["method"];
+      adapter: DocumentAdapter;
+      /** True when the quote did not contain the value the model gave, so no box was drawn. */
+      rejected_pointer?: boolean;
+      /** Why the value as written could not be read into its type. */
+      parse_error?: string;
+    }>;
     error_code?: ErrorCode;
   } = {},
 ): { event_id: string } {

@@ -731,6 +731,20 @@ textarea {
   font-weight: 600;
 }
 
+/* A rate or a term never breaks across lines; the payment column takes what is left. */
+.options-table tbody th {
+  min-width: 9rem;
+}
+
+.options-table .cell-payment {
+  width: 100%;
+}
+
+.options-table .cell-term,
+.options-table .cell-apr {
+  white-space: nowrap;
+}
+
 .option-label {
   display: block;
 }
@@ -847,10 +861,6 @@ textarea {
   font-size: 2rem;
   font-weight: 800;
   line-height: 1.15;
-}
-
-.card-payment-detail {
-  font-weight: 600;
 }
 
 .card-estimate {

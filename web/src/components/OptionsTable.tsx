@@ -42,9 +42,9 @@ export function OptionsTable({ line, actions }: OptionsTableProps) {
                     <span className="option-label">{option.label}</span>
                     <span className="option-name">{option.product_name}</span>
                   </th>
-                  <td>{cells.payment_text}</td>
-                  <td>{cells.term_text}</td>
-                  <td>{cells.apr_text}</td>
+                  <td className="cell-payment">{cells.payment_text}</td>
+                  <td className="cell-term">{cells.term_text}</td>
+                  <td className="cell-apr">{cells.apr_text}</td>
                 </tr>
               );
             })}

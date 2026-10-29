@@ -1,5 +1,7 @@
 import type { AddressInfo } from "node:net";
 import express from "express";
+import { createElement as h } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Box, ProposedValue } from "@shared/schemas";
 import { errorHandler } from "../server/api/index.js";
@@ -28,6 +30,7 @@ import {
   groupRows,
   nextUndecidedKey,
   openDiscrepancyCount,
+  recalculationCaption,
   rowBox,
   rowPage,
   sourceClaim,
@@ -35,6 +38,7 @@ import {
   waitingFor,
 } from "../web/src/review-present";
 import type { TaskDocumentView, TaskFieldRow, TaskView } from "../web/src/review-types";
+import { loadComponent } from "./helpers/web-components";
 import { APP, freshWorld, goodCaller, system } from "./helpers/world.js";
 
 // The reviewer screen's pure parts (where a box lands, how rows group, which controls are enabled,
@@ -269,6 +273,52 @@ describe("which controls are enabled", () => {
     expect(canCorrect(empty, "  $5,000.00 ")).toBe(true);
   });
 
+  it("offers Correct, with what it recalculates, on a decided value the income is calculated from", () => {
+    const caption = "Correcting recalculates the annualized income.";
+    const confirmedInput = row({ status: "confirmed", actions: ["correct"] });
+    expect(canCorrect(confirmedInput, "$2,400.00")).toBe(true);
+    expect(canCorrect(confirmedInput, "  ")).toBe(false);
+    expect(canConfirm(confirmedInput, true)).toBe(false);
+    expect(canFlag(confirmedInput, "other")).toBe(false);
+    expect(recalculationCaption(confirmedInput)).toBe(caption);
+    expect(recalculationCaption(row({ status: "edited", actions: ["correct"] }))).toBe(caption);
+    // Nothing to warn about before the first decision, on a decided value nothing reads, or on a calculated one.
+    expect(recalculationCaption(row())).toBeNull();
+    expect(recalculationCaption(row({ status: "confirmed", actions: [] }))).toBeNull();
+    expect(recalculationCaption(row({ status: "flagged", actions: [] }))).toBeNull();
+    expect(recalculationCaption(row({ location: "derived", status: "confirmed", actions: ["flag"] }))).toBeNull();
+  });
+
+  it("prints a Correct button and the caption on a decided input, and neither on other decided values", async () => {
+    const ValueList = await loadComponent("components/ValueList.tsx", "ValueList");
+    const render = (rows: TaskFieldRow[]) => {
+      const props = {
+        doc: document(rows),
+        texts: taskView([]).texts,
+        selectedKey: null,
+        onSelect: () => undefined,
+        onDecide: async () => true,
+        busy: false,
+        errors: {},
+        onClearError: () => undefined,
+        complete: { enabled: false, caption: "" },
+        onComplete: () => undefined,
+        completeError: null,
+      };
+      return renderToStaticMarkup(h(ValueList, props));
+    };
+    const input = render([row({ status: "confirmed", actions: ["correct"] })]);
+    expect(input).toContain(">Correct</button>");
+    expect(input).toContain("Correcting recalculates the annualized income.");
+    expect(input).not.toContain(">Confirm</button>");
+    const other = render([row({ status: "confirmed", actions: [] })]);
+    expect(other).not.toContain(">Correct</button>");
+    expect(other).not.toContain("recalculates");
+    const waiting = render([row()]);
+    expect(waiting).toContain(">Correct</button>");
+    expect(waiting).not.toContain("recalculates");
+  });
+
   it("flags with a reason, and a value that was never found starts as missing", () => {
     const empty = row({ location: "not_extracted", actions: ["correct", "flag"], proposal: boxProposal({ value: null }) });
     expect(defaultFlagReason(empty)).toBe("missing");
@@ -458,7 +508,10 @@ describe("the review API helpers", () => {
     const api = createReviewApi({ baseUrl: base });
     const view = await api.getTask(taskId);
     const next = await api.decide(taskId, proposalOf(view, "pay_stub.gross_pay"), { action: "confirm" });
-    expect(rowOf(next, "pay_stub.gross_pay")).toMatchObject({ status: "confirmed", actions: [] });
+    // Gross pay feeds the income, so it can still be corrected; the screen warns what that does.
+    expect(rowOf(next, "pay_stub.gross_pay")).toMatchObject({ status: "confirmed", actions: ["correct"] });
+    expect(recalculationCaption(rowOf(next, "pay_stub.gross_pay"))).toBe("Correcting recalculates the annualized income.");
+    expect(recalculationCaption(rowOf(next, "pay_stub.employer_name"))).toBeNull();
     expect(next.undecided_count).toBe(15);
     expect(completeState(next).enabled).toBe(false);
   });

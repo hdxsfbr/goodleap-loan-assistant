@@ -41,7 +41,7 @@ import { store } from "../store.js";
 import { compareOnConfirm, ruleText } from "./discrepancy.js";
 import { currentProposal, derivedInputState, recomputeDerived, withdrawVerification } from "./derived.js";
 import { singleFlight } from "./single-flight.js";
-import { FLAG_REASON_LABELS, LOCATED_ACK, NOT_LOCATED_CAPTION } from "./templates.js";
+import { LOCATED_ACK, NOT_LOCATED_CAPTION, reviewerFlagReasonLabels, type ReviewerFlagReason } from "./templates.js";
 
 // The review task lifecycle: opening the task once every slot has finished, the view the
 // reviewer screen renders, and the reviewer's decisions. A decision is one value command, then the
@@ -193,7 +193,10 @@ export interface TaskFieldRow {
   location: RowLocation;
   /** `extraction.source_not_located` for a value whose position could not be matched. */
   error_code: ErrorCode | null;
-  /** What the reviewer may do with the row now; empty once it has a state. */
+  /**
+   * What the reviewer may do with the row now; empty once it has a state, except that a decided
+   * value a formula reads (gross pay, pay frequency) can still be corrected while the review is open.
+   */
   actions: DecisionAction[];
   /** True when confirming needs the acknowledgement that the reviewer located the value. */
   requires_acknowledgement: boolean;
@@ -245,7 +248,8 @@ export interface TaskView {
   texts: {
     not_located_caption: string;
     located_acknowledgement: string;
-    flag_reasons: Record<FlagReason, string>;
+    /** The reasons a reviewer may choose when flagging a value; the ones only the system writes are left out. */
+    flag_reasons: Record<ReviewerFlagReason, string>;
   };
 }
 
@@ -367,6 +371,7 @@ function buildRow(
   doc: DocumentRecord,
   field: DocumentFieldDef,
   decisions: TaskDecision[],
+  reviewOpen: boolean,
 ): TaskFieldRow {
   const key = fieldKeyFor(doc.slot, field.id);
   const schema = schemaForSlot(doc.slot);
@@ -409,6 +414,9 @@ function buildRow(
     actions = proposal.state === "proposed" || proposal.state === "confirmed" ? ["flag"] : [];
   } else if (proposal?.state === "proposed") {
     actions = proposal.value === null ? ["correct", "flag"] : ["confirm", "correct", "flag"];
+  } else if (reviewOpen && proposal && isDecidedFormulaInput(proposal)) {
+    // Only the newest decided proposal of an input can be corrected; the income is calculated again.
+    actions = ["correct"];
   }
 
   const compareField = field.compareTo ? fieldDef(field.compareTo) : undefined;
@@ -461,7 +469,7 @@ export function taskView(taskId: string): TaskView {
         flag: documentFlag(doc),
         rows:
           doc.extraction_status === "done"
-            ? schema.fields.map((field) => buildRow(application.id, doc, field, decisions))
+            ? schema.fields.map((field) => buildRow(application.id, doc, field, decisions, task.status !== "complete"))
             : [],
       },
     ];
@@ -495,7 +503,7 @@ export function taskView(taskId: string): TaskView {
     texts: {
       not_located_caption: NOT_LOCATED_CAPTION,
       located_acknowledgement: LOCATED_ACK,
-      flag_reasons: { ...FLAG_REASON_LABELS },
+      flag_reasons: reviewerFlagReasonLabels(),
     },
   };
 }

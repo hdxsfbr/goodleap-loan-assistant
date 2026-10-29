@@ -329,7 +329,7 @@ describe("correcting a value that was already decided", () => {
       extracted: { value: 6_240_000, proposal_id: second.id },
     });
     const row = view.documents[0]?.rows.find((r) => r.field_id === "gross_pay");
-    expect(row).toMatchObject({ status: "edited", actions: [], decision: { action: "correct", before: 235_000, value: 240_000 } });
+    expect(row).toMatchObject({ status: "edited", actions: ["correct"], decision: { action: "correct", before: 235_000, value: 240_000 } });
     expect(view.documents[0]?.rows.find((r) => r.field_id === "annualized_income")?.proposal?.id).toBe(second.id);
     // The correction replaces a decided value and adds nothing that waits: 16 values, 2 decided.
     expect(view.undecided_count).toBe(14);

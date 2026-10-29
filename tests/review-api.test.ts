@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { FlagReasonSchema } from "@shared/reason-codes";
 import { audit } from "../server/audit-log.js";
 import { replyToDiscrepancy } from "../server/commands.js";
 import { deriveBanner } from "../server/domain/banner.js";
@@ -8,6 +9,7 @@ import { errorHandler } from "../server/api/index.js";
 import { createReviewRouter } from "../server/api/review.js";
 import { enqueueExtraction } from "../server/extraction/extract.js";
 import type { TaskView } from "../server/review/tasks.js";
+import { SYSTEM_ONLY_FLAG_REASONS } from "../server/review/templates.js";
 import { store } from "../server/store.js";
 import { APP, contractor, freshWorld, goodCaller, system } from "./helpers/world.js";
 
@@ -104,6 +106,25 @@ describe("reading", () => {
     });
   });
 
+  it("lists only the flag reasons a reviewer may choose, never the ones the system writes", async () => {
+    const v = view((await send("GET", `/api/review/tasks/${taskId}`)).json);
+    expect(Object.keys(v.texts.flag_reasons)).toEqual([
+      "illegible",
+      "source_not_located",
+      "mismatch_with_stated",
+      "wrong_document_type",
+      "missing",
+      "other",
+    ]);
+    expect(v.texts.flag_reasons).not.toHaveProperty("pay_frequency_not_located");
+    expect(Object.values(v.texts.flag_reasons).every((label) => label.trim() !== "")).toBe(true);
+    // Every flag reason is either offered to the reviewer or written by the system alone.
+    const offered = new Set<string>(Object.keys(v.texts.flag_reasons));
+    for (const reason of FlagReasonSchema.options) {
+      expect(offered.has(reason) !== (SYSTEM_ONLY_FLAG_REASONS as readonly string[]).includes(reason)).toBe(true);
+    }
+  });
+
   it("answers 404 for a task that does not exist, in the error body shape", async () => {
     const { status, json } = await send("GET", "/api/review/tasks/task_99");
     expect(status).toBe(404);
@@ -137,7 +158,8 @@ describe("decisions", () => {
     expect(events[1]).toMatchObject({ review_task_id: taskId, actor: { type: "reviewer", id: "rev_demo_001" }, session_id: "review-test" });
     expect(typeof (events[1] as { elapsed_ms?: number }).elapsed_ms).toBe("number");
     const row = view(json).documents[0]?.rows.find((r) => r.field_id === "gross_pay");
-    expect(row).toMatchObject({ status: "confirmed", actions: [] });
+    // Gross pay feeds the income, so it stays correctable while the review is open.
+    expect(row).toMatchObject({ status: "confirmed", actions: ["correct"] });
     expect(row?.decision).toMatchObject({ action: "confirm", value: 235000, actor: { type: "reviewer" } });
     expect(view(json).undecided_count).toBe(15);
     // A second decision on the same value is refused.
@@ -206,6 +228,43 @@ describe("decisions", () => {
     const fresh = await current();
     expect((await decide("pay_stub.gross_pay", fresh, { action: "correct", value: "lots" })).status).toBe(400);
     expect(store.getApplication(APP)?.verified.verified_annual_income).toBe(6_240_000);
+  });
+
+  it("offers Correct on a decided gross pay or pay frequency, newest proposal only, and on nothing else once decided", async () => {
+    const v = await current();
+    const rowsOf = (r: { json: unknown }) => view(r.json).documents[0]?.rows ?? [];
+    const actionsOf = (rows: ReturnType<typeof rowsOf>, id: string) => rows.find((row) => row.field_id === id)?.actions;
+
+    expect((await decide("pay_stub.employer_name", v, { action: "confirm" })).status).toBe(200);
+    const confirmed = await decide("pay_stub.gross_pay", v, { action: "confirm" });
+    // The two inputs of the income can be corrected after they are decided; other decided rows cannot.
+    expect(actionsOf(rowsOf(confirmed), "gross_pay")).toEqual(["correct"]);
+    expect(actionsOf(rowsOf(confirmed), "employer_name")).toEqual([]);
+    expect(actionsOf(rowsOf(confirmed), "pay_frequency")).toEqual(["confirm", "correct", "flag"]);
+
+    const both = await decide("pay_stub.pay_frequency", v, { action: "confirm" });
+    expect(actionsOf(rowsOf(both), "pay_frequency")).toEqual(["correct"]);
+    expect(actionsOf(rowsOf(both), "annualized_income")).toEqual(["flag"]);
+
+    // A corrected input can be corrected again: the row holds the newest proposal, which is now edited.
+    const corrected = await decide("pay_stub.gross_pay", v, { action: "correct", value: "$2,400.00" });
+    const gross = rowsOf(corrected).find((row) => row.field_id === "gross_pay");
+    expect(gross).toMatchObject({ status: "edited", actions: ["correct"] });
+    const again = await send("POST", `/api/review/tasks/${taskId}/decisions`, {
+      proposal_id: gross?.proposal?.id,
+      action: "correct",
+      value: "$2,500.00",
+    });
+    expect(again.status).toBe(200);
+    expect(actionsOf(rowsOf(again), "gross_pay")).toEqual(["correct"]);
+    expect(store.getApplication(APP)?.verified.verified_annual_income).toBe(6_500_000);
+  });
+
+  it("offers nothing on a flagged input: it is decided, but no value stands behind the income", async () => {
+    const v = await current();
+    const flagged = await decide("pay_stub.pay_frequency", v, { action: "flag", reason_code: "illegible" });
+    const rows = view(flagged.json).documents[0]?.rows ?? [];
+    expect(rows.find((row) => row.field_id === "pay_frequency")).toMatchObject({ status: "flagged", actions: [] });
   });
 
   it("flags with a fixed reason, and a value that was never found is flagged as missing by default", async () => {
@@ -287,6 +346,15 @@ describe("completing the review and the question to the contractor", () => {
     expect(view(done.json).task.status).toBe("complete");
     expect(store.getApplication(APP)?.status).toBe("documents_reviewed");
     expect((await send("POST", `/api/review/tasks/${taskId}/complete`)).status).toBe(409);
+  });
+
+  it("offers no correction on a decided input once the review is complete", async () => {
+    const v = await decideEverything();
+    expect(v.documents[0]?.rows.find((r) => r.field_id === "gross_pay")?.actions).toEqual(["correct"]);
+    const done = view((await send("POST", `/api/review/tasks/${taskId}/complete`)).json);
+    expect(done.task.status).toBe("complete");
+    expect(done.documents[0]?.rows.find((r) => r.field_id === "gross_pay")?.actions).toEqual([]);
+    expect(done.documents[0]?.rows.find((r) => r.field_id === "pay_frequency")?.actions).toEqual([]);
   });
 
   it("walks CUJ 5: the difference opens, the question is sent, the contractor answers, the reviewer resolves", async () => {

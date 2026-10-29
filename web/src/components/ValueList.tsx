@@ -13,6 +13,7 @@ import {
   groupRows,
   hasAction,
   LOCATION_LABELS,
+  recalculationCaption,
   sourceClaim,
   STATUS_LABELS,
   waitingFor,
@@ -159,6 +160,7 @@ function ValueRow({ row, doc, texts, selected, onSelect, onDecide, busy, error, 
   const value = row.proposal?.value ?? null;
   const summary = decisionSummary(row, texts.flag_reasons);
   const waiting = waitingFor(row);
+  const recalculation = recalculationCaption(row);
 
   // A pick made on the page brings its row into view.
   useEffect(() => {
@@ -278,6 +280,8 @@ function ValueRow({ row, doc, texts, selected, onSelect, onDecide, busy, error, 
             ) : null}
           </div>
         ) : null}
+
+        {recalculation ? <p className="muted value-recalculation">{recalculation}</p> : null}
 
         {mode === "correct" ? (
           <CorrectForm row={row} busy={busy} onSubmit={(text) => run({ action: "correct", value: text })} onCancel={() => open("idle")} />

@@ -12,7 +12,7 @@ interface DisclosureBlockViewProps {
 
 export function DisclosureBlockView({ block, productId }: DisclosureBlockViewProps) {
   const option = block.options.find((candidate) => candidate.product_id === productId);
-  if (!option) return null;
+  if (!option) throw new Error(`The disclosure block has no entry for product ${productId}.`);
   return (
     <div className="tila">
       <dl className="tila-box">

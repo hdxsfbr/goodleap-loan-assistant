@@ -23,6 +23,7 @@ const ApplicationForm = await loadComponent("components/ApplicationForm.tsx", "A
 const CopilotPanel = await loadComponent("components/CopilotPanel.tsx", "CopilotPanel");
 const OptionsTable = await loadComponent("components/OptionsTable.tsx", "OptionsTable");
 const HomeownerView = await loadComponent("routes/HomeownerView.tsx", "HomeownerView");
+const DisclosureBlockView = await loadComponent("components/DisclosureBlockView.tsx", "DisclosureBlockView");
 
 function render(element: ReactElement, state?: unknown): string {
   return renderToStaticMarkup(h(StaticRouter, { location: { pathname: "/", state } }, element));
@@ -84,6 +85,18 @@ describe("options table", () => {
     expect(html).not.toContain("a month");
     expect(html).not.toContain("9.99%");
     expect(html).toContain(FOOTER);
+  });
+});
+
+describe("disclosure box", () => {
+  it("prints the entry of the product it is given", () => {
+    const html = render(h(DisclosureBlockView, { block: HOMEOWNER_PROPS.disclosure_block, productId: "fixed_10y" }));
+    expect(count(html, 'class="tila-box"')).toBe(1);
+  });
+
+  it("refuses to render a product the block has no entry for, naming the product", () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(() => render(h(DisclosureBlockView, { block: SHORT_BLOCK, productId: "deferred_12m" }))).toThrow(/deferred_12m/);
   });
 });
 

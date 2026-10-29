@@ -149,6 +149,19 @@ export function canCorrect(row: TaskFieldRow, text: string): boolean {
   return hasAction(row, "correct") && text.trim() !== "";
 }
 
+/** What a reviewer is told before correcting a value that was already decided and feeds the income. */
+export const RECALCULATION_CAPTION = "Correcting recalculates the annualized income.";
+
+/**
+ * The caption shown with Correct on a decided value (confirmed or corrected) that the server still
+ * lets the reviewer correct: only the values the annualized income is calculated from, never a
+ * value that is waiting for its first decision.
+ */
+export function recalculationCaption(row: TaskFieldRow): string | null {
+  const decided = row.status === "confirmed" || row.status === "edited";
+  return decided && hasAction(row, "correct") ? RECALCULATION_CAPTION : null;
+}
+
 /** The reason a flag starts with: a value that was never found is "missing", any other starts unchosen. */
 export function defaultFlagReason(row: TaskFieldRow): string {
   return row.location === "not_extracted" ? "missing" : "";

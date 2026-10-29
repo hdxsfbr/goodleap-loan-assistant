@@ -5,7 +5,7 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 17:18 PDT
+Last updated: 2026-10-28 17:24 PDT
 
 ## Waves
 
@@ -326,6 +326,19 @@ Deferred to the final pass: merging `server/extraction/llm.ts` into `server/llm/
   built-versus-described section rewritten from the actual state.
 * Left for the final README pass: the eval runner (wave 6A, running) and `docs/evals.md` once it
   exists; the item 85 statement that the author can explain every line is Andre's to make.
+
+### Wave 6B (cleanup) report
+
+* Done with tests (524 total): the options table's term and APR cells no longer wrap; the
+  unused CSS rule is gone; `DisclosureBlockView` throws on a missing entry instead of returning
+  null; the reviewer's flag-reason list omits the one system-only code
+  (`pay_frequency_not_located`, written only by the derived-income path); a decided formula input
+  now offers Correct ("Correcting recalculates the annualized income.") while the task is open;
+  `setExtractionStatus` accepts the two diagnostic fields without a cast.
+* Known: the decisions route still accepts the system-only reason from a reviewer (the schema
+  allows it); a system-flagged derived row's summary reads the humanized code.
+* `scripts/verify.sh` added: build, tests, boot on a spare port, health check, and the browser
+  walk when playwright-core and Chrome are present; `verify-out/` is gitignored.
 
 ## Decisions made during the build
 
