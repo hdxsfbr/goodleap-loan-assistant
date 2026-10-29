@@ -5,7 +5,7 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 18:28 PDT
+Last updated: 2026-10-28 21:06 PDT
 
 ## Waves
 
@@ -511,6 +511,20 @@ words either.
   `tests/extract.test.ts`, and an uploaded pay stub through the real adapter to located proposals in
   `tests/upload.test.ts`. The upload tests that expected `no_text_layer` for the pay stub picture now use a
   blank page and an OCR reader that finds nothing. `tests/helpers/pdf.ts` writes small PDFs for them.
+
+### Demo video
+
+* `docs/demo/`: narration in Andre's cloned voice (Chatterbox, the same setup as the Cerbo and
+  Meridian demos), brand title and close cards, a Playwright capture (`record.mjs`, one clip per
+  scene from a timestamped screencast, a visible cursor, cuts of waiting time recorded to
+  `cuts.json`), `mux.sh` pacing each scene to its narration, `verify.sh`. Output 4:23 at
+  1440x900; every model call live; only waiting is cut; between scenes 8 and 9 the estimate and
+  scope-letter rows are confirmed through the API to keep scene 9 short (the README says so).
+* Found while recording: across six takes the guardrail blocked a legitimate options
+  explanation more than once (judge `uncaveated_promo` on the "$30K" question, one number-match
+  block), once ending in the fallback. The recorder discards such a take for scenes 3 and 4
+  because the narration says the explanation follows. The false-positive rate of the judge on
+  benign explanations is a known limit to measure with the grown judge set.
 
 ## Decisions made during the build
 

@@ -1,0 +1,3 @@
+Everything that happened is in the audit trail: each message, each model call with its raw request and response, each tool call marked live or mocked, each guardrail verdict, each proposal and confirmation, and the homeowner view exactly as it was shown.
+
+The credit decision engine was called zero times, and the page says so. What did this homeowner see, and why, is a query.

@@ -1,0 +1,3 @@
+Now the contractor mentions the homeowner's name and the ZIP code, and that she is thinking about solar.
+
+Three values are proposed on the form, each with the exact words it came from. The backend verified that quote before the card appeared. Solar was mentioned in passing, so nothing is proposed for it; the assistant asks instead. The contractor confirms, and only then do the values enter the application.

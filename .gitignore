@@ -6,3 +6,9 @@ dist/
 data/
 .env
 verify-out/
+
+# Generated demo media (docs/demo/README.md says how to regenerate it)
+docs/demo/audio/
+docs/demo/clips/
+docs/demo/slides/png/
+docs/demo/out/

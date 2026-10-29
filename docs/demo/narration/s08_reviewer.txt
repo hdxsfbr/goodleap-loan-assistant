@@ -1,0 +1,3 @@
+This is the reviewer's screen. Each value read from the pay stub points at the words it came from, and the box is drawn from the document's own word positions, not from anything the model said.
+
+The reviewer confirms, corrects, or flags every value. Net pay could be read but not located on this page, so it shows the quoted text with no box, and the reviewer has to acknowledge that before confirming. A scanned upload is read by local OCR and gets its boxes the same way.

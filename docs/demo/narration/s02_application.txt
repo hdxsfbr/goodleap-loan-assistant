@@ -1,0 +1,3 @@
+Today an application takes about twenty-two minutes, and nearly four in ten are abandoned, mostly at product selection and income verification.
+
+This is the contractor's application, with the assistant beside the form. The form stays the system of record. The assistant explains, calculates, and suggests; it never writes into the form by itself.

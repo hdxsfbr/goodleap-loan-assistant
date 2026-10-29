@@ -1,0 +1,3 @@
+When the contractor turns the tablet toward the homeowner, this is the screen.
+
+It is rendered from a code template, not by the model: the Truth in Lending box with the annual percentage rate, the finance charge, the amount financed, and the total of payments; the payment schedule; and the estimate statement under every figure. The APR is the actuarial rate of the schedule shown. Nothing here names or implies a decision.

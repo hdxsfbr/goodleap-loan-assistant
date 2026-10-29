@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Read first</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  h1 { font-size: 104px; line-height: 1.05; }
+  ol { list-style: none; margin: 56px 0 0; padding: 0; counter-reset: item; }
+  li { counter-increment: item; display: flex; align-items: baseline; gap: 28px; padding: 18px 0; border-top: 1px solid var(--divider); font-size: 32px; color: var(--text); }
+  li:last-child { border-bottom: 1px solid var(--divider); }
+  li::before { content: counter(item); width: 40px; flex: none; color: var(--lavender); font-weight: 600; }
+  li span { color: var(--muted); font-size: 24px; margin-left: auto; }
+  code { font-family: var(--font); font-weight: 600; }
+  .repo { margin-top: 44px; color: var(--muted); font-size: 24px; }
+  .repo strong { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="slide">
+  <h1>Read <span class="grad">first</span></h1>
+  <ol>
+    <li><code>docs/design-document.md</code><span>the submission</span></li>
+    <li><code>docs/designs/loan-assistant-design.md</code><span>the internal design</span></li>
+    <li><code>docs/build-log.md</code><span>every finding and decision</span></li>
+    <li><code>README.md</code><span>the walkthrough</span></li>
+  </ol>
+  <p class="repo"><strong>labs.gauntletai.com/andrebatista/goodleap-loan-assistant</strong></p>
+</main>
+</body>
+</html>

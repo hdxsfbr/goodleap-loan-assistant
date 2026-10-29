@@ -1,0 +1,3 @@
+The contractor attaches the project estimate and the scope letter, and submits.
+
+Extraction runs in the background, one document at a time, and a review task opens for a GoodLeap reviewer. The contractor never reviews the extraction; that stays internal.

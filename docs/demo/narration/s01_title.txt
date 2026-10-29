@@ -1,0 +1,3 @@
+This is the GoodLeap Loan Assistant, a prototype built for the partner portal.
+
+It does two things. It helps a contractor quote a loan in the homeowner's kitchen, and it reads the uploaded documents so a GoodLeap reviewer can verify them faster. In both, nothing a model writes becomes part of the application until a person confirms it.

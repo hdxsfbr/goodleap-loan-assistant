@@ -1,0 +1,3 @@
+The design is the primary deliverable: the submission document, the internal design with its data model and alternatives, and the build log with every review finding and decision are in the repository, with a README that runs this in five minutes.
+
+Thank you.

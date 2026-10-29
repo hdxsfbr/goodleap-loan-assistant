@@ -1,0 +1,40 @@
+/* Shared look of the title and close slides: the app's own palette and type (web/src/styles.css). */
+@font-face { font-family: "Sofia Pro"; src: url("../../../web/public/brand/fonts/sofia_regular.otf") format("opentype"); font-weight: 400; }
+@font-face { font-family: "Sofia Pro"; src: url("../../../web/public/brand/fonts/sofia_semi_bold.otf") format("opentype"); font-weight: 600; }
+@font-face { font-family: "Sofia Pro"; src: url("../../../web/public/brand/fonts/sofia_black.otf") format("opentype"); font-weight: 900; }
+
+:root {
+  --bg: #200f55;
+  --panel: #1c0f45;
+  --card: #2e2d66;
+  --text: #ffffff;
+  --body: #cfcbe6;
+  --muted: #a9a4c9;
+  --lavender: #b48cff;
+  --pink: #ff6fb3;
+  --coral: #ff8a5b;
+  --divider: #3a3570;
+  --highlight-gradient: linear-gradient(90deg, #b48cff 0%, #ff6fb3 55%, #ff8a5b 100%);
+  --font: "Sofia Pro", "Outfit", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1440px; height: 900px; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--body);
+  font-family: var(--font);
+  font-size: 22px;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slide { width: 1440px; height: 900px; padding: 96px 120px; display: flex; flex-direction: column; justify-content: center; }
+.wordmark { display: block; width: 340px; height: auto; }
+h1 { margin: 0; color: var(--text); font-weight: 900; letter-spacing: -0.01em; }
+.grad {
+  background: var(--highlight-gradient);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
