@@ -5,7 +5,7 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 17:39 PDT
+Last updated: 2026-10-28 17:42 PDT
 
 ## Waves
 
@@ -371,6 +371,19 @@ Deferred to the final pass: merging `server/extraction/llm.ts` into `server/llm/
   10/10 with 0/10 false positives, 62 calls, 89 s. All four adversarial prompts passed by the
   model declining, so the live run did not exercise a block on them; the scripted tests do.
 * Final tree: `bash scripts/verify.sh` green (build, 558 tests, health, seven-screenshot walk).
+
+### Submission checks
+
+* Fresh clone from GitLab, following the README verbatim: `npm install` (218 packages), `cp
+  .env.example .env` with the key, `npm run build` exit 0, `npm test` 558 passed, `npm start`,
+  health endpoint with the OpenRouter model ids, `load-demo`, one live copilot turn (status,
+  options, explanation, done), the home page. Found: `.env.example` pinned `PORT=3000`, which by
+  the override rule beat a `PORT=3471` exported in the shell; the example now leaves the port
+  commented out and the README says how to change it.
+* The README opens with a reader's map and its known limits; there is no CI, and the README says
+  so. No secrets or developer commentary in the tree (checked at every commit).
+* A requirements audit of the brief against the repository runs as the last step; its findings
+  are fixed or disclosed before the final push.
 
 ## Decisions made during the build
 

@@ -11,6 +11,27 @@ The submission document is [docs/design-document.md](docs/design-document.md). T
 from is [docs/designs/loan-assistant-design.md](docs/designs/loan-assistant-design.md). This is a take-home
 project for GoodLeap through Gauntlet AI's partner program (brief version 1, updated 2026-10-20).
 
+## Where to look first
+
+1. [docs/design-document.md](docs/design-document.md): the six-section submission, under 2,000 words.
+2. "Run it in five minutes" and the walkthrough below: the copilot, the homeowner view, a proposal from
+   the contractor's words, the audit page, then submit and the reviewer screen.
+3. [docs/designs/loan-assistant-design.md](docs/designs/loan-assistant-design.md): the internal design
+   with the data model, the data flows, 37 weighed alternatives and the file-by-file plan the build
+   followed.
+4. [docs/build-log.md](docs/build-log.md): what each wave built, every review finding and every decision
+   made during the build, including the places where the code departs from the design.
+5. [docs/evals.md](docs/evals.md) and [docs/ai-usage.md](docs/ai-usage.md): the evaluation sets with
+   their dated results, and how AI was used to build this.
+
+Known limits, one line each: the adversarial eval cases passed by the model declining, so the live run did
+not exercise a guardrail block on them (the scripted tests do); the judge set has 20 cases, too few to
+measure its stated thresholds; number-match reads "N monthly payments" as a count, so an invented count
+passes it; the extraction client exists twice (`server/extraction/llm.ts` beside `server/llm/client.ts`)
+and is merged after submission because merging changes the recorded fixture; the no-model button and the
+kill switches were verified from code and tests, not in a browser; there is no CI, so every number in this
+README comes from a local run on the date given.
+
 ## The problem
 
 - Loan applications take 22 minutes on average, against an industry benchmark of under 10.
@@ -43,7 +64,7 @@ cp .env.example .env
 
 Open `.env` and set `ANTHROPIC_API_KEY=` to your key. Values in `.env` override variables your shell already
 exports. To use an OpenRouter key, also set `ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1`; the model ids
-are translated for you. If port 3000 is taken, set `PORT` in `.env`.
+are translated for you. If port 3000 is taken, run `PORT=3001 npm start` or set `PORT` in `.env` (a value in `.env` overrides the shell).
 
 ```bash
 npm start
