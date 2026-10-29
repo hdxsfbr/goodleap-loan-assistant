@@ -19,13 +19,15 @@ function Shell() {
   const health = useHealth();
   const flags = useSessionFlags();
   return (
-    <>
+    <div className="app-shell">
       <RoleTabs />
-      <KeyBanner health={health} keyMissing={flags.key_missing} keyRejected={flags.key_rejected} />
-      <main>
-        <Outlet />
-      </main>
-    </>
+      <div className="app-body">
+        <KeyBanner health={health} keyMissing={flags.key_missing} keyRejected={flags.key_rejected} />
+        <main>
+          <Outlet />
+        </main>
+      </div>
+    </div>
   );
 }
 

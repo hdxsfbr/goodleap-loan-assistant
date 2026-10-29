@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { listTasks, REVIEW_TASKS_CHANGED } from "../review-api";
 import { auditPath, DEFAULT_APPLICATION_ID } from "../routes";
+import { DocumentCheckIcon, FormIcon, ListIcon } from "./Icons";
 
 type Role = "contractor" | "reviewer" | "audit";
 
@@ -46,21 +47,25 @@ function useOpenReviewTasks(pathname: string): number {
   return open;
 }
 
-/** The top bar: the three role tabs and a caption saying whose screen this is. */
+/** The sidebar (the top bar on a narrow screen): the wordmark, the three role tabs and a caption saying whose screen this is. */
 export function RoleTabs() {
   const { pathname } = useLocation();
   const role = roleOf(pathname);
   const openTasks = useOpenReviewTasks(pathname);
   const tabClass = (active: boolean) => (active ? "role-tab active" : "role-tab");
   return (
-    <header className="topbar">
-      <span className="brand">GoodLeap Loan Assistant</span>
+    <header className="sidebar">
+      <span className="brand">
+        <img src="/brand/wordmark.svg" width="170" height="57" alt="GoodLeap Loan Assistant" />
+      </span>
       <nav className="role-tabs" aria-label="Role">
         <NavLink to="/" end className={() => tabClass(role === "contractor")}>
-          Contractor
+          <FormIcon />
+          <span className="role-tab-label">Contractor</span>
         </NavLink>
         <NavLink to="/reviewer" className={() => tabClass(role === "reviewer")}>
-          Reviewer
+          <DocumentCheckIcon />
+          <span className="role-tab-label">Reviewer</span>
           {openTasks > 0 ? (
             <span className="tab-badge" aria-label={`${openTasks} open review ${openTasks === 1 ? "task" : "tasks"}`}>
               {openTasks}
@@ -68,7 +73,8 @@ export function RoleTabs() {
           ) : null}
         </NavLink>
         <NavLink to={auditPath(DEFAULT_APPLICATION_ID)} className={() => tabClass(role === "audit")}>
-          Audit
+          <ListIcon />
+          <span className="role-tab-label">Audit</span>
         </NavLink>
       </nav>
       <span className="role-caption">{CAPTIONS[role]}</span>

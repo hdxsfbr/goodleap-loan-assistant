@@ -295,6 +295,15 @@ reply test made its one live model call). Without a key that one test is skipped
 0 of 10) in 62 model calls, and `bash scripts/verify.sh` passed every step including the browser walk. The
 build log has the counts after each wave.
 
+## Brand assets
+
+The web client uses GoodLeap's portal look: the "good" mark extended into the wordmark
+(`web/public/brand/wordmark.svg`, rebuilt by `scripts/build-wordmark.py`), the favicon, the
+portal's palette, and the Sofia Pro font files the portal itself serves (`web/public/brand/fonts/`,
+weights 400, 600 and 900). Sofia Pro is a commercial typeface licensed to GoodLeap; the files are
+bundled here only so the prototype renders as part of their product. Replace the `@font-face` rules
+at the top of `web/src/styles.css` with a free face if that is not wanted.
+
 ## Repository layout
 
 ```

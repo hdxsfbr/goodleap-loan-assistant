@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import type { DiscrepancyResolution } from "@shared/schemas";
 import { DiscrepancyPanel } from "../components/DiscrepancyPanel";
 import { DocumentViewer } from "../components/DocumentViewer";
+import { ChevronRightIcon, DocumentIcon } from "../components/Icons";
 import { ValueList } from "../components/ValueList";
 import { toErrorBody } from "../errors";
 import {
@@ -104,6 +105,9 @@ function TaskListPage() {
           <ul className="task-list">
             {list.tasks.map((task) => (
               <li key={task.id} className="task-card">
+                <span className="card-icon">
+                  <DocumentIcon />
+                </span>
                 <div className="task-card-main">
                   <h2 className="task-card-title">
                     <Link to={reviewTaskPath(task.id)}>Application {task.application_id}</Link>
@@ -121,6 +125,7 @@ function TaskListPage() {
                 <Link to={reviewTaskPath(task.id)} className="button primary small">
                   {task.status === "complete" ? "View" : "Review"}
                 </Link>
+                <ChevronRightIcon className="card-chevron" />
               </li>
             ))}
           </ul>

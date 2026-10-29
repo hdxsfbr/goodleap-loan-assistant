@@ -17,6 +17,7 @@ import { hasRequestedAmount, proposalCountText } from "../present";
 import { auditPath, homeownerPath } from "../routes";
 import { exchangeForMessage, latestOptionsExchange, turnHasContent } from "../stream";
 import type { Exchange, SourceFocus, TurnState } from "../types";
+import { ArrowUpIcon, ChevronRightIcon, SparkleIcon } from "./Icons";
 import { OptionsTable } from "./OptionsTable";
 
 interface CopilotPanelProps {
@@ -114,6 +115,9 @@ export function CopilotPanel({ applicationId, view, focus }: CopilotPanelProps) 
   return (
     <section className="copilot-card" aria-labelledby="copilot-title">
       <div className="card-head">
+        <span className="assistant-mark" aria-hidden="true">
+          <SparkleIcon />
+        </span>
         <h2 id="copilot-title">Assistant</h2>
       </div>
 
@@ -125,6 +129,7 @@ export function CopilotPanel({ applicationId, view, focus }: CopilotPanelProps) 
               {SUGGESTED_PROMPTS.map((prompt) => (
                 <button key={prompt} type="button" className="prompt-chip" onClick={() => send(prompt)}>
                   {prompt}
+                  <ChevronRightIcon />
                 </button>
               ))}
             </div>
@@ -171,7 +176,7 @@ export function CopilotPanel({ applicationId, view, focus }: CopilotPanelProps) 
         </label>
         <textarea
           id="composer-input"
-          rows={2}
+          rows={1}
           maxLength={MAX_MESSAGE_LENGTH}
           value={draft}
           disabled={!assistantAvailable}
@@ -179,8 +184,13 @@ export function CopilotPanel({ applicationId, view, focus }: CopilotPanelProps) 
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
         />
-        <button type="submit" className="button primary" disabled={!assistantAvailable || busy || draft.trim() === ""}>
-          Send
+        <button
+          type="submit"
+          className="send-button"
+          aria-label="Send"
+          disabled={!assistantAvailable || busy || draft.trim() === ""}
+        >
+          <ArrowUpIcon />
         </button>
       </form>
     </section>
