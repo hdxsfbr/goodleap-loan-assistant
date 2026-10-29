@@ -5,7 +5,7 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 17:12 PDT
+Last updated: 2026-10-28 17:18 PDT
 
 ## Waves
 
@@ -15,10 +15,10 @@ Last updated: 2026-10-28 17:12 PDT
 | 1B | 1 | Skeleton: root config, `shared/`, store, commands, audit log, routes, mocks, placeholder web, `tests/commands.test.ts` (items 1 to 7, 9, 10, 11 reason codes, 12 to 20, 21a routes, 48a, 49, 50a, 51, 65) | done | `996ec3c` |
 | 1 close | - | Build, `npm test`, `/api/healthz`, create `.env` from the OpenRouter key, one codex review, filtered fix pass, commit, push | done: 15 fixes, 139 tests, pushed to GitLab `main` | `996ec3c` |
 | 2 | 2 | Calculator, catalog, disclosure template, surface types, golden tests (items 30 to 33, 74, 76) | done: 6 fixes, 157 tests, pushed | `7672027` |
-| 3 | 3 | Copilot end to end: 3A server (21a homeowner-view route, 22, 24 to 29, 34 to 38, 73, tests 75, 80, 81) and 3C web (52 to 57, 62 pulled forward from wave 4, 63, 64) | built: 359 tests; smoke passes against OpenRouter; five live copilot turns exercised the guardrail; done: fix passes applied, 516 tests, browser walk clean (three live turns, homeowner view and back, audit) | committed with wave 5 |
-| 4 | 4 | README walkthrough (8), audit view (62), docs (82, 84, 85); CUJs 6 and 7 run | not started | - |
-| 5 | 5 | Document extraction and review: 5A server (11, 23, 25b, 39 to 47, 48b, 50b, 68, 78, 79; **running**, Sonnet, in parallel with wave 3 since its files are disjoint; the 21b hook and the router mount are applied by me after wave 3A lands) then 5B reviewer web (58 to 61); 83 in wave 6 | 5A built: fixture recorded live (text PDFs 9/9 fields, pay stub 7/7 with 6/6 located); hooks applied by me; review filtered (8 kept); fix pass done (fixture re-recorded); 5B reviewer screen built and driven end to end in a real browser (boxes on the right words, net pay not located, discrepancy sent, reply, resolve, complete); 516 tests | committed with wave 3 |
-| 6 | 6 | Eval runner (72) and judge cases, submission doc built-versus-described (86) and final trim, final README pass | not started | - |
+| 3 | 3 | Copilot end to end: 3A server (21a homeowner-view route, 22, 24 to 29, 34 to 38, 73, tests 75, 80, 81) and 3C web (52 to 57, 62 pulled forward from wave 4, 63, 64) | built: 359 tests; smoke passes against OpenRouter; five live copilot turns exercised the guardrail; done: fix passes applied, 516 tests, browser walk clean (three live turns, homeowner view and back, audit) | `2b7cc96` |
+| 4 | 4 | README walkthrough (8), docs (82 to 85); the audit view (62) was built in wave 3 | done; the walkthrough was checked against the running app by the docs agent (four live turns, the no-model button, the review path on the fixture) | see git log |
+| 5 | 5 | Document extraction and review: 5A server (11, 23, 25b, 39 to 47, 48b, 50b, 68, 78, 79; **running**, Sonnet, in parallel with wave 3 since its files are disjoint; the 21b hook and the router mount are applied by me after wave 3A lands) then 5B reviewer web (58 to 61); 83 in wave 6 | 5A built: fixture recorded live (text PDFs 9/9 fields, pay stub 7/7 with 6/6 located); hooks applied by me; review filtered (8 kept); fix pass done (fixture re-recorded); 5B reviewer screen built and driven end to end in a real browser (boxes on the right words, net pay not located, discrepancy sent, reply, resolve, complete); 516 tests | `2b7cc96` |
+| 6 | 6 | Eval runner (72) and judge cases (**running**, Sonnet), submission doc trimmed with built-versus-described (done by me, numbers to confirm after the eval run), final cleanup pass and README pass (pending) | **running** | - |
 
 Each wave closes the same way: I build and run the suite myself, one independent codex review
 of the uncommitted code, a visible filter of its findings, one fix pass, one commit, push to
@@ -312,6 +312,20 @@ without a flag and logged document values.
 
 Deferred to the final pass: merging `server/extraction/llm.ts` into `server/llm/client.ts`
 (two agents would collide in one file now); the submit 409 stays unstructured.
+
+### Wave 4 (docs) report
+
+* Written: `README.md` (five-minute run, what you see without a key, a 16-step walkthrough,
+  built-versus-described table, scripts, dated test results), `docs/audit-schema.md` (generated
+  from the schema file), `docs/states.md`, `docs/evals.md`, `docs/ai-usage.md`.
+* Differences between code and design the docs note: the golden cases follow item 74 rather than
+  the case list in section 12; the deny-list set has 9 must-pass strings; the extraction replay
+  runs on every `npm test`; `note` exists only on `field.rejected`; the review completes through
+  an explicit "Complete review" click.
+* The submission document was trimmed by me from 2,158 to 1,978 words (table included) and its
+  built-versus-described section rewritten from the actual state.
+* Left for the final README pass: the eval runner (wave 6A, running) and `docs/evals.md` once it
+  exists; the item 85 statement that the author can explain every line is Andre's to make.
 
 ## Decisions made during the build
 
