@@ -538,3 +538,11 @@ words either.
 | 2026-10-28 | Values in `.env` override variables already exported by the shell | A stale `ANTHROPIC_BASE_URL` in the demo machine's shell would otherwise send the OpenRouter key to api.anthropic.com and every model call would fail; `.env.example` states the rule |
 | 2026-10-28 | Uploaded PDFs with no text layer are read by tesseract.js at runtime; the committed OCR file stays for the sample pay stub | The author reversed Alternative P for uploads. Measured cost was 3 MB of language data once and about a second per page, not the 15 MB and 10 to 30 s the alternative assumed; the sample pay stub keeps its fixture so the walkthrough and the no-key replay do not vary |
 | 2026-10-28 | OCR timeout is its own code, `extraction.ocr_timeout`, 120 s per document | A timeout that reads as `internal` in the audit trail hides what happened; the code is one enum entry and one message |
+
+## After submission
+
+* 2026-10-29: `docs/production-plan.md`, the plan to scale the prototype to GoodLeap's stack
+  (ECS, RDS, S3, SQS, Textract, JSM, Snowflake, Entra ID, GitHub Actions): what maps where, the
+  workstreams and timeline, the load, data handling, code changes before production, and the
+  decisions GoodLeap owns. Linked from the README's docs list and the deployment guide. Committed
+  locally, not pushed.

@@ -339,6 +339,7 @@ docs/
   states.md                   Application, proposal, document, review task and discrepancy states, and the commands that move them
   evals.md                    The evaluation sets, what is built, and how to run each
   deployment.md               Deployment guide: local, container, and what changes for production
+  production-plan.md          Scaling the prototype to GoodLeap's production stack: mapping, workstreams, load, data handling, open decisions
   test-results.md             Dated local runs: the suite, the evals, the verify script, a fresh clone
   ai-usage.md                 How AI was used to build this, what the author decided, what the models got wrong
   build-log.md                What each build wave built, every review finding and every decision

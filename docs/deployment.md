@@ -50,7 +50,9 @@ the file is truncated at each boot, as the prototype does (the store is in memor
 
 ## What changes for production
 
-The internal design, section 10, places each piece on GoodLeap's stack. In short:
+The internal design, section 10, places each piece on GoodLeap's stack, and
+[production-plan.md](production-plan.md) is the phased plan to get there: the mapping, the
+workstreams and timeline, the load, data handling, and the decisions GoodLeap owns. In short:
 
 * The in-memory store becomes four RDS tables (proposals, discrepancies, review tasks, audit
   events) written only through the same commands; the audit table is INSERT-only.
