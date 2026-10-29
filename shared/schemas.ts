@@ -190,7 +190,7 @@ export type PositionedWord = z.infer<typeof PositionedWordSchema>;
 
 export const MessageSourceSchema = obj({
   kind: z.literal("message"),
-  ref: obj({ message_id: z.string() }),
+  ref: obj({ message_id: z.string(), quote: z.string() }),
 });
 
 export const BoxSourceSchema = obj({
@@ -475,8 +475,22 @@ export const DisclosureBlockSchema = obj({
 });
 export type DisclosureBlock = z.infer<typeof DisclosureBlockSchema>;
 
+/**
+ * One option's table cells as the person reads them, pre-formatted by the server (the client
+ * formats no numbers): the payment wording per mechanic, the term and the APR.
+ */
+export const OptionDisplaySchema = obj({
+  label: PaymentOptionSchema.shape.label,
+  product_id: ProductIdSchema,
+  payment_text: z.string(),
+  term_text: z.string(),
+  apr_text: z.string(),
+});
+export type OptionDisplay = z.infer<typeof OptionDisplaySchema>;
+
 export const HomeownerViewPropsSchema = obj({
   options: CalculatorResultSchema,
+  options_display: z.array(OptionDisplaySchema),
   disclosure_block: DisclosureBlockSchema,
   explanation: z.string(),
   mechanic_sentences: z.record(ProductIdSchema, z.string()),
@@ -524,6 +538,8 @@ export type Verdict = z.infer<typeof VerdictSchema>;
 export const GuardrailAllowedSchema = obj({
   calculator_values: z.array(z.string()),
   contractor_figures: z.array(z.string()),
+  /** Each priced option's own calculator values by label ("Option A"), for the per-option binding of money figures. */
+  option_values: z.record(z.string(), z.array(z.string())).optional(),
 });
 export type GuardrailAllowed = z.infer<typeof GuardrailAllowedSchema>;
 
@@ -678,6 +694,10 @@ export const AuditEventSchema = z.discriminatedUnion("type", [
         field_key: z.string(),
         match_method: MatchMethodSchema,
         adapter: DocumentAdapterSchema,
+        /** True when the quote did not contain the value the model gave, so no box was drawn. */
+        rejected_pointer: z.boolean().optional(),
+        /** Why the value as written could not be read into its type; the field is then `not_extracted`. */
+        parse_error: z.string().optional(),
       }),
     ),
     error_code: ErrorCodeSchema.optional(),
@@ -776,6 +796,7 @@ export const OptionsLineSchema = obj({
   inputs_echo: z.string(),
   inputs_source: InputsSourceSchema,
   argument_label: z.string().nullable(),
+  options_display: z.array(OptionDisplaySchema),
   disclosure_block: DisclosureBlockSchema,
   footer: z.string(),
 });

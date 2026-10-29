@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DisclosureBlockSchema,
   HomeownerViewPropsSchema,
+  OptionDisplaySchema,
   type CalculatorResult,
   type DisclosureBlock,
   type HomeownerViewProps,
@@ -17,6 +18,7 @@ import {
   fixedSentenceForTerm,
   renderChatFooter,
   renderDisclosureBlock,
+  renderOptionsDisplay,
 } from "../server/domain/disclosures/template.js";
 import { calculate } from "../server/domain/payments/calculator.js";
 import {
@@ -193,6 +195,74 @@ describe("disclosure block", () => {
 function sentencesFor(): HomeownerViewProps["mechanic_sentences"] {
   return Object.fromEntries(CATALOG.products.map((product) => [product.id, product.plain_sentence]));
 }
+
+describe("options display", () => {
+  it("words the payment per mechanic, with the term and the APR, for all three options", () => {
+    const display = renderOptionsDisplay(resultFor().options);
+    expect(display).toEqual([
+      {
+        label: "Option A",
+        product_id: "fixed_10y",
+        payment_text: "$396.29 a month",
+        term_text: "120 months",
+        apr_text: "9.99%",
+      },
+      {
+        label: "Option B",
+        product_id: "zero_intro_18m",
+        payment_text: "$250.00 a month for the first 18 months, then $414.14 a month",
+        term_text: "120 months",
+        apr_text: "12.99%",
+      },
+      {
+        label: "Option C",
+        product_id: "deferred_12m",
+        payment_text: "$2,500.00 a month for 12 months",
+        term_text: "120 months",
+        apr_text: "17.99%",
+      },
+    ]);
+    for (const entry of display) expect(OptionDisplaySchema.parse(entry)).toEqual(entry);
+  });
+
+  it("follows the fixed option's term and keeps the calculator's order", () => {
+    const sixty = calculate({ amount_cents: AMOUNT_CENTS, term_months: 60, products: CATALOG });
+    expect(renderOptionsDisplay(sixty.options).map((entry) => entry.term_text)).toEqual([
+      "60 months",
+      "120 months",
+      "120 months",
+    ]);
+    expect(renderOptionsDisplay(sixty.options)[0]?.payment_text).toBe("$637.26 a month");
+    expect(renderOptionsDisplay([...sixty.options].reverse()).map((entry) => entry.label)).toEqual([
+      "Option C",
+      "Option B",
+      "Option A",
+    ]);
+    const oneMonth = calculate({ amount_cents: AMOUNT_CENTS, term_months: 1, products: CATALOG, product_ids: ["fixed_10y"] });
+    expect(renderOptionsDisplay(oneMonth.options)[0]?.term_text).toBe("1 month");
+  });
+
+  it("is a pure function of the options", () => {
+    const result = resultFor();
+    const before = structuredClone(result);
+    expect(renderOptionsDisplay(result.options)).toEqual(renderOptionsDisplay(result.options));
+    expect(result).toEqual(before);
+  });
+
+  it("travels on the homeowner view, computed from the options shown", () => {
+    const result = resultFor();
+    const props = composeHomeownerView({
+      options: result,
+      disclosure_block: renderDisclosureBlock(result.options),
+      explanation: "Option A costs less per month.",
+      mechanic_sentences: sentencesFor(),
+      template_version: "template@0123abcd",
+    });
+    expect(props.options_display).toEqual(renderOptionsDisplay(result.options));
+    expect(HomeownerViewPropsSchema.shape.options_display.parse(props.options_display)).toEqual(props.options_display);
+    expect(() => HomeownerViewPropsSchema.parse({ ...props, options_display: undefined })).toThrow();
+  });
+});
 
 describe("homeowner view", () => {
   const options = resultFor();

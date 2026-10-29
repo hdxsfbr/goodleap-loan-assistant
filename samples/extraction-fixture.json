@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "recorded_at": "2026-10-29T00:01:21.507Z",
+  "entries": {
+    "pay_stub": {
+      "document": "paystub.pdf",
+      "model_id": "anthropic/claude-opus-5.5",
+      "effort": "medium",
+      "system_prompt_version": "extraction_prompt@849fe776",
+      "lines_sha256": "ccc81abf385286bfa884926c63caa801a9c9b626c63d0dcb1e793513b5575a7e",
+      "request_sha256": "4072ad7a5426e58b2c5cdcdfb9d13b5bb922c94c4edb02408881af847e8c5188",
+      "latency_ms": 6810,
+      "usage": {
+        "input": 3685,
+        "output": 437,
+        "cache_read": 0
+      },
+      "stop_reason": "end_turn",
+      "response": {
+        "id": "msg_011CgVYcVYmT1o7spzCkdwFy",
+        "type": "message",
+        "role": "assistant",
+        "container": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"document_matches_slot\":true,\"fields\":{\"employer_name\":{\"value\":\"Pinecrest Harbor Logistics\",\"page\":1,\"line\":0,\"token_start\":0,\"token_end\":2,\"quoted_text\":\"Pinecrest Harbor Logistics\"},\"pay_period_start\":{\"value\":\"10/05/2026\",\"page\":1,\"line\":4,\"token_start\":3,\"token_end\":3,\"quoted_text\":\"10/05/2026\"},\"pay_period_end\":{\"value\":\"10/18/2026\",\"page\":1,\"line\":5,\"token_start\":3,\"token_end\":3,\"quoted_text\":\"10/18/2026\"},\"pay_frequency\":{\"value\":\"Biweekly\",\"page\":1,\"line\":3,\"token_start\":2,\"token_end\":2,\"quoted_text\":\"Biweekly\"},\"gross_pay\":{\"value\":\"2,350.00\",\"page\":1,\"line\":7,\"token_start\":2,\"token_end\":2,\"quoted_text\":\"2,350.00\"},\"net_pay\":{\"value\":\"1,812.40\",\"page\":1,\"line\":12,\"token_start\":2,\"token_end\":2,\"quoted_text\":\"1,812.40\"},\"ytd_gross\":{\"value\":\"49,350.00\",\"page\":1,\"line\":13,\"token_start\":2,\"token_end\":2,\"quoted_text\":\"49,350.00\"}}}",
+            "citations": []
+          }
+        ],
+        "model": "anthropic/claude-opus-5.5",
+        "stop_reason": "end_turn",
+        "stop_details": null,
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 3685,
+          "output_tokens": 437,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "inference_geo": "global",
+          "server_tool_use": null,
+          "service_tier": "standard",
+          "speed": "standard",
+          "cost": 0.02348,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 0.02348,
+            "upstream_inference_prompt_cost": 0.01474,
+            "upstream_inference_completions_cost": 0.00874
+          }
+        },
+        "context_management": null,
+        "provider": "Claude Platform on AWS"
+      }
+    },
+    "estimate": {
+      "document": "estimate.pdf",
+      "model_id": "anthropic/claude-opus-5.5",
+      "effort": "medium",
+      "system_prompt_version": "extraction_prompt@849fe776",
+      "lines_sha256": "4f142f97b17fc814dec03dd3efbe3eef0aefb9d577afb3bf57febd321ed796a3",
+      "request_sha256": "995071c1953ae326ed177d001421dc076b2e7c78b911273de3c790b2ad319677",
+      "latency_ms": 6440,
+      "usage": {
+        "input": 3151,
+        "output": 328,
+        "cache_read": 0
+      },
+      "stop_reason": "end_turn",
+      "response": {
+        "id": "msg_011CgVYd1mD7RFUbyGNySPZv",
+        "type": "message",
+        "role": "assistant",
+        "container": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"document_matches_slot\":true,\"fields\":{\"contractor_name\":{\"value\":\"Calderbrook Roofing\",\"page\":1,\"line\":0,\"token_start\":0,\"token_end\":1,\"quoted_text\":\"Calderbrook Roofing\"},\"project_description\":{\"value\":\"Full roof replacement with architectural composition shingles\",\"page\":1,\"line\":6,\"token_start\":1,\"token_end\":7,\"quoted_text\":\"Full roof replacement with architectural composition shingles\"},\"estimate_date\":{\"value\":\"September 14, 2026\",\"page\":1,\"line\":3,\"token_start\":2,\"token_end\":4,\"quoted_text\":\"September 14, 2026\"},\"total_amount\":{\"value\":\"$31,000.00\",\"page\":1,\"line\":13,\"token_start\":2,\"token_end\":2,\"quoted_text\":\"$31,000.00\"},\"line_item_count\":{\"value\":\"4\",\"page\":1,\"line\":12,\"token_start\":2,\"token_end\":2,\"quoted_text\":\"4\"}}}",
+            "citations": []
+          }
+        ],
+        "model": "anthropic/claude-opus-5.5",
+        "stop_reason": "end_turn",
+        "stop_details": null,
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 3151,
+          "output_tokens": 328,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "inference_geo": "global",
+          "server_tool_use": null,
+          "service_tier": "standard",
+          "speed": "standard",
+          "cost": 0.019164,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 0.019164,
+            "upstream_inference_prompt_cost": 0.012604,
+            "upstream_inference_completions_cost": 0.00656
+          }
+        },
+        "context_management": null,
+        "provider": "Claude Platform on AWS"
+      }
+    },
+    "scope_letter": {
+      "document": "scope_letter.pdf",
+      "model_id": "anthropic/claude-opus-5.5",
+      "effort": "medium",
+      "system_prompt_version": "extraction_prompt@849fe776",
+      "lines_sha256": "780de30db64eb0f9d10a3d1d164ae53f77066884008397cb17754687906cadad",
+      "request_sha256": "42d6895b01c2ed99e8e7832f62bc7ac8cc53981b8aa7d587b5e3d7a54bb75894",
+      "latency_ms": 5007,
+      "usage": {
+        "input": 2952,
+        "output": 313,
+        "cache_read": 0
+      },
+      "stop_reason": "end_turn",
+      "response": {
+        "id": "msg_011CgVYdRdteyEqoNm87nqUb",
+        "type": "message",
+        "role": "assistant",
+        "container": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"document_matches_slot\":true,\"fields\":{\"property_address\":{\"value\":\"2217 Marlow Court, San Jose, CA 95112\",\"page\":1,\"line\":9,\"token_start\":2,\"token_end\":8,\"quoted_text\":\"2217 Marlow Court, San Jose, CA 95112\"},\"scope_summary\":{\"value\":\"Complete tear-off and re-roof with architectural shingles\",\"page\":1,\"line\":10,\"token_start\":3,\"token_end\":9,\"quoted_text\":\"Complete tear-off and re-roof with architectural shingles\"},\"start_date\":{\"value\":\"November 9, 2026\",\"page\":1,\"line\":11,\"token_start\":3,\"token_end\":5,\"quoted_text\":\"November 9, 2026\"},\"contractor_name\":{\"value\":\"Calderbrook Roofing\",\"page\":1,\"line\":0,\"token_start\":0,\"token_end\":1,\"quoted_text\":\"Calderbrook Roofing\"}}}",
+            "citations": []
+          }
+        ],
+        "model": "anthropic/claude-opus-5.5",
+        "stop_reason": "end_turn",
+        "stop_details": null,
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 2952,
+          "output_tokens": 313,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "inference_geo": "global",
+          "server_tool_use": null,
+          "service_tier": "standard",
+          "speed": "standard",
+          "cost": 0.018068,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 0.018068,
+            "upstream_inference_prompt_cost": 0.011808,
+            "upstream_inference_completions_cost": 0.00626
+          }
+        },
+        "context_management": null,
+        "provider": "Claude Platform on AWS"
+      }
+    }
+  }
+}

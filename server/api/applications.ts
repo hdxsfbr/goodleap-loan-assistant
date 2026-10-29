@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { Router } from "express";
 import { fieldDef, zodForField } from "@shared/application-schema";
@@ -5,6 +6,7 @@ import {
   ApplicationViewSchema,
   DiscrepancyReplyRequestSchema,
   FieldEditRequestSchema,
+  HomeownerViewRequestSchema,
   ProposalRejectRequestSchema,
   type ApplicationFieldView,
   type ApplicationView,
@@ -12,21 +14,28 @@ import {
   type DocumentAdapter,
   type DocumentSlot,
   type FieldValue,
+  type HomeownerViewProps,
+  type OptionsRecord,
 } from "@shared/schemas";
 import { audit } from "../audit-log.js";
 import {
   attachDocument,
   confirmValue,
+  editValue,
   rejectValue,
   replyToDiscrepancy,
   setFieldValue,
   submitApplication,
 } from "../commands.js";
 import { deriveBanner } from "../domain/banner.js";
+import { renderDisclosureBlock } from "../domain/disclosures/template.js";
+import { composeHomeownerView } from "../domain/surfaces.js";
 import { CommandError } from "../errors.js";
+import { cannedExplanation, cannedSentenceFor } from "../guardrail/fallback.js";
 import { store } from "../store.js";
-import { PROJECT_ROOT } from "../versions.js";
+import { PROJECT_ROOT, getVersions } from "../versions.js";
 import { contractorCtx, parseBody, requireApplication } from "./http.js";
+import { startDocumentReview, systemCtx } from "../extraction/extract.js";
 
 /**
  * The application as the form shows it: stored values with the live proposals merged in as
@@ -81,6 +90,38 @@ const DEMO_DOCUMENTS: ReadonlyArray<{ slot: DocumentSlot; file: string; adapter:
   { slot: "scope_letter", file: "samples/scope_letter.pdf", adapter: "pdfjs" },
 ];
 
+
+/** JSON with sorted keys, so a content hash does not depend on how an object was built. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * The homeowner view for a stored Options record, as a pure function of the record: its
+ * calculator output, the disclosure block rendered by the template, its explanation (the canned
+ * sentences when the turn had none or the record came from the no-model button), the mechanic
+ * sentence per product, and the template version.
+ */
+function homeownerViewFor(record: OptionsRecord): HomeownerViewProps {
+  const result = record.calculator_output;
+  return composeHomeownerView({
+    options: result,
+    disclosure_block: renderDisclosureBlock(result.options),
+    explanation: record.explanation ?? cannedExplanation(result.options),
+    mechanic_sentences: Object.fromEntries(
+      result.options.map((option) => [option.product_id, cannedSentenceFor(option)]),
+    ),
+    template_version: getVersions().template,
+  });
+}
+
 export function createApplicationsRouter(): Router {
   const router = Router();
 
@@ -118,6 +159,24 @@ export function createApplicationsRouter(): Router {
     res.json(buildApplicationView(req.params.id));
   });
 
+  router.post("/api/applications/:id/proposals/:pid/edit", (req, res) => {
+    const ctx = contractorCtx(req, req.params.id);
+    const body = parseBody(FieldEditRequestSchema, req.body);
+    const proposal = store.getProposal(req.params.pid);
+    if (!proposal || proposal.application_id !== req.params.id) {
+      throw new CommandError("That suggestion is no longer waiting for a decision.");
+    }
+    if (!fieldDef(proposal.field_key)) {
+      throw new CommandError("Document values are corrected in review.");
+    }
+    const parsed = zodForField(proposal.field_key).safeParse(body.value);
+    if (!parsed.success) {
+      throw new CommandError(parsed.error.issues[0]?.message ?? "That value is not valid.", { status: 400 });
+    }
+    editValue(ctx, req.params.pid, parsed.data);
+    res.json(buildApplicationView(req.params.id));
+  });
+
   router.post("/api/applications/:id/confirm-all", (req, res) => {
     const ctx = contractorCtx(req, req.params.id);
     for (const proposal of store.listProposals(req.params.id, { state: "proposed" })) {
@@ -141,6 +200,35 @@ export function createApplicationsRouter(): Router {
     res.json(buildApplicationView(req.params.id));
   });
 
+  router.post("/api/applications/:id/homeowner-view", (req, res) => {
+    const ctx = contractorCtx(req, req.params.id);
+    const body = parseBody(HomeownerViewRequestSchema, req.body);
+    const record = store.getOptions(body.options_id);
+    if (!record || record.application_id !== req.params.id) {
+      throw new CommandError(`Payment options ${body.options_id} were not found.`, { status: 404 });
+    }
+    const props = homeownerViewFor(record);
+    // Produced by: every event of the record's turn, or, for the no-model button, the calculation
+    // and storage events that name this record.
+    const producedBy = audit
+      .list(req.params.id)
+      .filter(
+        (event) =>
+          (record.turn_id !== undefined && event.turn_id === record.turn_id) ||
+          ((event.type === "tool.call" || event.type === "options.stored" || event.type === "options.explained") &&
+            event.options_id === record.options_id),
+      )
+      .map((event) => event.event_id);
+    audit.emit(ctx, "view.rendered", {
+      surface: "homeowner_view",
+      options_id: record.options_id,
+      props,
+      content_sha256: createHash("sha256").update(stableStringify(props)).digest("hex"),
+      produced_by: producedBy,
+    });
+    res.json(props);
+  });
+
   router.post("/api/applications/:id/discrepancies/:did/reply", (req, res) => {
     const ctx = contractorCtx(req, req.params.id);
     const body = parseBody(DiscrepancyReplyRequestSchema, req.body);
@@ -159,8 +247,12 @@ export function createApplicationsRouter(): Router {
 
   router.post("/api/applications/:id/submit", (req, res) => {
     const ctx = contractorCtx(req, req.params.id);
-    submitApplication(ctx);
+    const documentIds = submitApplication(ctx);
     res.json(buildApplicationView(req.params.id));
+    // Item 21b: extraction (or the manual review task) starts after the response is sent.
+    void startDocumentReview(systemCtx(req.params.id, ctx.session_id), documentIds).catch((err) =>
+      console.error("The document review could not start:", err instanceof Error ? err.message : err),
+    );
   });
 
   return router;

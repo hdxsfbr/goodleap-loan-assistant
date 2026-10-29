@@ -4,7 +4,9 @@ import { CATALOG } from "../domain/catalog.js";
 import { createCatalogMock } from "./catalog/mock.js";
 import { createContractorProfileMock } from "./contractor-profile/mock.js";
 import { CreditEngineStub } from "./credit-engine/stub.js";
+import { createDocumentsMock } from "./documents/mock.js";
 import { PlaidStub } from "./plaid/stub.js";
+import { createReviewQueueMock } from "./review-queue/mock-jsm.js";
 import type {
   CatalogService,
   ContractorProfileService,
@@ -29,8 +31,8 @@ export interface Services {
   creditEngine: CreditEngineService;
   plaid: PlaidService;
   contractorProfile: ContractorProfileService;
-  documents?: DocumentsService;
-  reviewQueue?: ReviewQueueService;
+  documents: DocumentsService;
+  reviewQueue: ReviewQueueService;
 }
 
 export const services: Services = {
@@ -38,6 +40,8 @@ export const services: Services = {
   creditEngine: new CreditEngineStub(),
   plaid: new PlaidStub(),
   contractorProfile: createContractorProfileMock(),
+  documents: createDocumentsMock(),
+  reviewQueue: createReviewQueueMock(),
 };
 
 export interface MockCallOptions {

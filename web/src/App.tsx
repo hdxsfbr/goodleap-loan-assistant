@@ -1,24 +1,27 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { NavLink, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
-import { HealthResponseSchema, type HealthResponse } from "@shared/schemas";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Link, Outlet, Route, Routes } from "react-router-dom";
+import type { HealthResponse } from "@shared/schemas";
+import { getHealth } from "./api";
+import { KeyBanner } from "./components/KeyBanner";
+import { RoleTabs } from "./components/RoleTabs";
+import { HealthContext, useHealth } from "./health";
+import { useSessionFlags } from "./hooks";
+import { AuditView } from "./routes/AuditView";
+import { ContractorView } from "./routes/ContractorView";
+import { HomeownerView } from "./routes/HomeownerView";
 
-/** The flags and key state from `/api/healthz`, read once when the app loads. */
-const HealthContext = createContext<HealthResponse | null>(null);
+export { useHealth };
 
-export function useHealth(): HealthResponse | null {
-  return useContext(HealthContext);
-}
+// The reviewer screen carries the PDF renderer, so it loads when the tab is opened.
+const ReviewerView = lazy(() => import("./routes/ReviewerView").then((module) => ({ default: module.ReviewerView })));
 
 function Shell() {
+  const health = useHealth();
+  const flags = useSessionFlags();
   return (
     <>
-      <nav aria-label="Role">
-        <NavLink to="/" end>
-          Contractor
-        </NavLink>{" "}
-        <NavLink to="/reviewer">Reviewer</NavLink>{" "}
-        <NavLink to="/audit/app_demo_001">Audit</NavLink>
-      </nav>
+      <RoleTabs />
+      <KeyBanner health={health} keyMissing={flags.key_missing} keyRejected={flags.key_rejected} />
       <main>
         <Outlet />
       </main>
@@ -26,25 +29,29 @@ function Shell() {
   );
 }
 
-function Contractor() {
-  return <h1>Contractor</h1>;
-}
-
 function Reviewer() {
-  const { taskId } = useParams();
-  return <h1>{taskId ? `Review ${taskId}` : "Reviewer"}</h1>;
+  return (
+    <Suspense
+      fallback={
+        <div className="page">
+          <p className="muted">Loading...</p>
+        </div>
+      }
+    >
+      <ReviewerView />
+    </Suspense>
+  );
 }
 
-function Audit() {
-  const { applicationId } = useParams();
-  return <h1>Audit for {applicationId}</h1>;
-}
-
-function Homeowner() {
-  const location = useLocation();
-  const props: unknown = location.state;
-  if (!props) return <p>Open this from the application.</p>;
-  return <h1>Payment options</h1>;
+function NotFound() {
+  return (
+    <div className="page">
+      <h1 className="page-title">That page does not exist</h1>
+      <p>
+        <Link to="/">Go to the application</Link>
+      </p>
+    </div>
+  );
 }
 
 export function App() {
@@ -52,13 +59,12 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/healthz")
-      .then((response) => response.json())
-      .then((json) => {
-        if (!cancelled) setHealth(HealthResponseSchema.parse(json));
+    getHealth()
+      .then((next) => {
+        if (!cancelled) setHealth(next);
       })
       .catch(() => {
-        // the shell still renders; flags stay unknown
+        // The shell still renders; the flags stay unknown and the screens report their own failures.
       });
     return () => {
       cancelled = true;
@@ -68,12 +74,15 @@ export function App() {
   return (
     <HealthContext.Provider value={health}>
       <Routes>
-        <Route path="/homeowner" element={<Homeowner />} />
+        <Route path="/applications/:applicationId/homeowner" element={<HomeownerView />} />
+        <Route path="/homeowner" element={<HomeownerView />} />
         <Route element={<Shell />}>
-          <Route path="/" element={<Contractor />} />
+          <Route path="/" element={<ContractorView />} />
+          <Route path="/applications/:applicationId" element={<ContractorView />} />
           <Route path="/reviewer" element={<Reviewer />} />
           <Route path="/reviewer/:taskId" element={<Reviewer />} />
-          <Route path="/audit/:applicationId" element={<Audit />} />
+          <Route path="/audit/:applicationId" element={<AuditView />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </HealthContext.Provider>

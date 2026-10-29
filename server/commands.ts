@@ -10,6 +10,7 @@ import {
   DiscrepancyReasonSchema,
   FlagReasonSchema,
   RejectReasonSchema,
+  type FlagReason,
   type RejectReason,
 } from "@shared/reason-codes";
 import {
@@ -548,6 +549,56 @@ export function rejectValue(
   proposal.state = "rejected";
   proposal.reason_code = reason_code;
   return { proposal: copy(proposal), event_id: event.event_id };
+}
+
+/**
+ * Takes the stored verification back when the confirmed `pay_stub.annualized_income` behind it is
+ * flagged or about to be replaced: `verified` is set to nothing and one `field.rejected` event
+ * (system actor, the task id, the reason) records why. Only the system confirms that value, so
+ * only the system withdraws it, and only while the proposal is still the confirmed one that wrote
+ * what `verified` holds. The proposal's own state is left to the caller, which supersedes it next.
+ */
+export function withdrawVerifiedValue(
+  ctx: Ctx,
+  field_key: string,
+  input: { proposal_id: string; reason_code: FlagReason; review_task_id: string; note?: string },
+): { event_id: string } {
+  const app = requireApplication(ctx);
+  if (ctx.actor.type !== "system") {
+    throw new CommandError("Only the system can withdraw a verified value.");
+  }
+  if (field_key !== "pay_stub.annualized_income") {
+    throw new CommandError("That value is not stored as verified.");
+  }
+  parseOrThrow(FlagReasonSchema, input.reason_code, "A verified value is withdrawn with a flag reason.");
+  requireOpenTask(ctx, input.review_task_id);
+  const proposal = storeWriter().proposals.get(input.proposal_id);
+  if (
+    !proposal ||
+    proposal.application_id !== app.id ||
+    proposal.field_key !== field_key ||
+    proposal.source.kind !== "formula" ||
+    proposal.state !== "confirmed"
+  ) {
+    throw new CommandError("That is not the confirmed value.", { details: { proposal_id: input.proposal_id } });
+  }
+  if (app.verified.verified_annual_income === null || app.verified.verified_annual_income !== proposal.value) {
+    throw new CommandError("That value is not what is stored as verified.");
+  }
+
+  const event = audit.emit(
+    ctx,
+    "field.rejected",
+    compact({
+      proposal_id: proposal.id,
+      field_key,
+      reason_code: input.reason_code,
+      note: input.note,
+      review_task_id: input.review_task_id,
+    }),
+  );
+  app.verified = { verified_annual_income: null, verification_source: null };
+  return { event_id: event.event_id };
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -15,6 +15,8 @@ import {
   monthsAfterPromo,
 } from "../server/domain/payments/calculator.js";
 import { AppError, CommandError } from "../server/errors.js";
+import { renderOptionsDisplay } from "../server/domain/disclosures/template.js";
+import { allFigureTokens } from "../server/guardrail/number-match.js";
 import { services } from "../server/services/index.js";
 
 // Item 74: the golden cases, exact to the cent, against the catalog of item 30. The expected
@@ -569,6 +571,24 @@ describe("calculatorValues", () => {
     );
     expect(new Set(all).size).toBe(all.length);
     for (const value of all) expect(normalizeFigure(value)).not.toBeNull();
+  });
+
+  it("covers every figure the options display prints, for any amount and fixed term", () => {
+    for (const amount of ["$1.00", "$30,000.00", "$42,500.00", "$100,000.00"]) {
+      for (const term of [null, 12, 60, 90, 180]) {
+        const result = calculate({ amount_cents: usd(amount), term_months: term, products: CATALOG });
+        const display = renderOptionsDisplay(result.options);
+        result.options.forEach((option, index) => {
+          const allowed = new Set(calculatorValues(option).map((value) => normalizeFigure(value)));
+          const shown = display[index];
+          for (const text of [shown?.payment_text, shown?.term_text, shown?.apr_text]) {
+            const figures = allFigureTokens(text ?? "");
+            expect(figures.length).toBeGreaterThan(0);
+            for (const figure of figures) expect(allowed.has(figure)).toBe(true);
+          }
+        });
+      }
+    }
   });
 
   it("spells an odd term with one decimal where exact and two decimals otherwise", () => {

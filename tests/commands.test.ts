@@ -33,6 +33,7 @@ import {
   startReview,
   storeOptions,
   submitApplication,
+  withdrawVerifiedValue,
 } from "../server/commands.js";
 import { AppError, CommandError } from "../server/errors.js";
 import { storeWriter, store } from "../server/store.js";
@@ -83,7 +84,7 @@ function fillRequired(): void {
 
 function messageSource(text = "The roof job is thirty thousand."): ProposalSource {
   const { message } = appendMessage(contractor, text);
-  return { kind: "message", ref: { message_id: message.id } };
+  return { kind: "message", ref: { message_id: message.id, quote: text } };
 }
 
 function boxSource(documentId: string, quotedText: string): ProposalSource {
@@ -219,7 +220,7 @@ describe("proposeFieldValue", () => {
       proposeFieldValue(contractor, {
         field_key: "project_type",
         value: "roofing",
-        source: { kind: "message", ref: { message_id: "m_999" } },
+        source: { kind: "message", ref: { message_id: "m_999", quote: "roofing" } },
       }),
     ).toThrow(CommandError);
   });
@@ -475,7 +476,7 @@ describe("audit events per command", () => {
         proposeFieldValue(contractor, {
           field_key: "project_description",
           value: "Roof tear-off",
-          source: { kind: "message", ref: { message_id: messageId } },
+          source: { kind: "message", ref: { message_id: messageId, quote: "roof" } },
         }).proposal?.id ?? "";
     });
     step("editValue", () => editValue(contractor, proposalId, "Roof replacement"));
@@ -485,7 +486,7 @@ describe("audit events per command", () => {
         proposeFieldValue(contractor, {
           field_key: "preferred_term_months",
           value: "120",
-          source: { kind: "message", ref: { message_id: messageId } },
+          source: { kind: "message", ref: { message_id: messageId, quote: "roof" } },
         }).proposal?.id ?? "";
     });
     step("rejectValue", () => rejectValue(contractor, rejectId, "dismissed_by_contractor"));
@@ -493,7 +494,7 @@ describe("audit events per command", () => {
     proposeFieldValue(contractor, {
       field_key: "selected_product_id",
       value: "fixed_10y",
-      source: { kind: "message", ref: { message_id: messageId } },
+      source: { kind: "message", ref: { message_id: messageId, quote: "roof" } },
     });
     confirmId = store.listProposals(APP, { state: "proposed" })[0]?.id ?? "";
     step("confirmValue", () => confirmValue(contractor, confirmId, {}));
@@ -559,6 +560,13 @@ describe("audit events per command", () => {
     step("resolveDiscrepancy", () =>
       resolveDiscrepancy(reviewer, recordId, { resolution: "explained", note: "Second job." }),
     );
+    step("withdrawVerifiedValue", () =>
+      withdrawVerifiedValue(system, "pay_stub.annualized_income", {
+        proposal_id: annualized?.id ?? "",
+        reason_code: "mismatch_with_stated",
+        review_task_id: taskId,
+      }),
+    );
     step("completeReview", () => completeReview(reviewer, taskId));
 
     expect(Object.fromEntries(log)).toMatchObject({
@@ -580,6 +588,7 @@ describe("audit events per command", () => {
       sendDiscrepancyQuestion: ["discrepancy.sent"],
       replyToDiscrepancy: ["discrepancy.replied"],
       resolveDiscrepancy: ["discrepancy.resolved"],
+      withdrawVerifiedValue: ["field.rejected"],
       completeReview: ["review.completed", "application.state_changed"],
     });
 
@@ -932,7 +941,7 @@ describe("document proposal lifecycle", () => {
 describe("dropped proposals", () => {
   it("never record a source that does not exist", () => {
     setFieldValue(contractor, "requested_loan_amount", 3_000_000);
-    const nowhere: ProposalSource = { kind: "message", ref: { message_id: "m_999" } };
+    const nowhere: ProposalSource = { kind: "message", ref: { message_id: "m_999", quote: "roofing" } };
 
     // would be dropped as equals_confirmed
     expect(() =>
@@ -999,6 +1008,108 @@ describe("verified income", () => {
     const { formula, task } = annualizedProposal(0);
     confirmValue(system, formula?.id ?? "", { review_task_id: task.id });
     expect(app().verified).toEqual({ verified_annual_income: 0, verification_source: "document_review" });
+  });
+});
+
+describe("withdrawVerifiedValue", () => {
+  const NOTHING = { verified_annual_income: null, verification_source: null };
+
+  function verifiedIncome() {
+    const { docs, task } = openReview();
+    const gross = proposeFieldValue(system, {
+      field_key: "pay_stub.gross_pay",
+      value: 235_000,
+      source: boxSource(docs.pay_stub.id, "2,350.00"),
+    }).proposal;
+    const formula = proposeFieldValue(system, {
+      field_key: "pay_stub.annualized_income",
+      value: 6_110_000,
+      source: { kind: "formula", ref: { formula: "annualized_income", inputs: [gross?.id ?? ""] } },
+    }).proposal;
+    confirmValue(system, formula?.id ?? "", { review_task_id: task.id });
+    return { formula: formula!, gross: gross!, task };
+  }
+
+  it("clears the stored income and appends one field.rejected from the system, with the task and the reason", () => {
+    const { formula, task } = verifiedIncome();
+    expect(app().verified).toEqual({ verified_annual_income: 6_110_000, verification_source: "document_review" });
+    const fields = app().fields;
+
+    expect(
+      appended(() =>
+        withdrawVerifiedValue(system, "pay_stub.annualized_income", {
+          proposal_id: formula.id,
+          reason_code: "mismatch_with_stated",
+          review_task_id: task.id,
+          note: "Flagged by the reviewer.",
+        }),
+      ),
+    ).toEqual(["field.rejected"]);
+
+    expect(app().verified).toEqual(NOTHING);
+    expect(app().fields).toEqual(fields);
+    expect(audit.list(APP).at(-1)).toMatchObject({
+      type: "field.rejected",
+      actor: { type: "system", id: "system" },
+      proposal_id: formula.id,
+      field_key: "pay_stub.annualized_income",
+      reason_code: "mismatch_with_stated",
+      review_task_id: task.id,
+      note: "Flagged by the reviewer.",
+    });
+    // Nothing is left to withdraw.
+    expect(() =>
+      withdrawVerifiedValue(system, "pay_stub.annualized_income", {
+        proposal_id: formula.id,
+        reason_code: "other",
+        review_task_id: task.id,
+      }),
+    ).toThrow(/not what is stored as verified/);
+  });
+
+  it("is the system's alone, for the verified income, for the confirmed value that is stored, in an open task", () => {
+    const { formula, gross, task } = verifiedIncome();
+    const input = { proposal_id: formula.id, reason_code: "mismatch_with_stated" as const, review_task_id: task.id };
+    const refused = (fn: () => unknown, message: RegExp) => {
+      expect(appended(() => expect(fn).toThrow(message))).toEqual([]);
+      expect(app().verified).toEqual({ verified_annual_income: 6_110_000, verification_source: "document_review" });
+    };
+
+    refused(() => withdrawVerifiedValue(reviewer, "pay_stub.annualized_income", input), /Only the system/);
+    refused(() => withdrawVerifiedValue(system, "pay_stub.gross_pay", { ...input, proposal_id: gross.id }), /not stored as verified/);
+    refused(() => withdrawVerifiedValue(system, "pay_stub.annualized_income", { ...input, proposal_id: gross.id }), /not the confirmed value/);
+    refused(() => withdrawVerifiedValue(system, "pay_stub.annualized_income", { ...input, proposal_id: "p_404" }), /not the confirmed value/);
+    refused(() => withdrawVerifiedValue(system, "pay_stub.annualized_income", { ...input, review_task_id: "task_404" }), /not found/);
+    refused(
+      () => withdrawVerifiedValue(system, "pay_stub.annualized_income", { ...input, reason_code: "dismissed_by_contractor" as never }),
+      /flag reason/,
+    );
+
+    // A proposal that was replaced is no longer the confirmed one.
+    proposeFieldValue(system, {
+      field_key: "pay_stub.annualized_income",
+      value: 6_240_000,
+      source: { kind: "formula", ref: { formula: "annualized_income", inputs: [gross.id] } },
+    });
+    expect(store.getProposal(formula.id)?.state).toBe("superseded");
+    refused(() => withdrawVerifiedValue(system, "pay_stub.annualized_income", input), /not the confirmed value/);
+  });
+
+  it("is refused once the review is complete", () => {
+    const { formula, task } = verifiedIncome();
+    // Every proposal of the task has a state, so the review can complete.
+    for (const p of store.proposalsForTask(task.id).filter((q) => q.state === "proposed")) {
+      rejectValue(reviewer, p.id, "other", { review_task_id: task.id });
+    }
+    completeReview(reviewer, task.id);
+    expect(() =>
+      withdrawVerifiedValue(system, "pay_stub.annualized_income", {
+        proposal_id: formula.id,
+        reason_code: "other",
+        review_task_id: task.id,
+      }),
+    ).toThrow(/already complete/);
+    expect(app().verified.verified_annual_income).toBe(6_110_000);
   });
 });
 

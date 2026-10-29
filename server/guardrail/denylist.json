@@ -1,0 +1,75 @@
+{
+  "_note": "COMPLIANCE-OWNED. Word-boundary, case-insensitive patterns over the verdict words. A match inside an allowed context is skipped; {{OUT_OF_SCOPE_REPLY}} stands for the fixed out-of-scope reply in server/guardrail/fallback.ts. The judge can add blocks; it cannot lower this floor.",
+  "entries": [
+    {
+      "pattern": "\\bapproved\\b",
+      "reason": "States or implies that the application has been or will be approved.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    },
+    {
+      "pattern": "\\bpre[- ]?approved\\b",
+      "reason": "States or implies that the homeowner is pre-approved.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    },
+    {
+      "pattern": "\\bguaranteed\\b",
+      "reason": "Promises an outcome or a term of the loan.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    },
+    {
+      "pattern": "\\bqualify\\b",
+      "reason": "States or implies that the homeowner qualifies.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    },
+    {
+      "pattern": "\\bqualifies\\b",
+      "reason": "States or implies that the homeowner qualifies.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    },
+    {
+      "pattern": "\\bqualified\\b",
+      "reason": "States or implies that the homeowner is qualified.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    },
+    {
+      "pattern": "\\beligible\\b",
+      "reason": "States or implies that the homeowner is eligible.",
+      "added_by": "Compliance (placeholder)",
+      "date": "2026-10-28",
+      "allowed_contexts": [
+        "subject to credit approval",
+        "{{OUT_OF_SCOPE_REPLY}}"
+      ]
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import {
   WHAT_HAPPENS_NEXT,
   fixedSentenceForTerm,
   renderDisclosureBlock,
+  renderOptionsDisplay,
 } from "./disclosures/template.js";
 
 // Where model-adjacent text can reach a person, and what must travel with it (Technical Plan
@@ -96,6 +97,7 @@ export function composeHomeownerView(input: ComposeHomeownerViewInput): Homeowne
   }
   return HomeownerViewPropsSchema.parse({
     options,
+    options_display: renderOptionsDisplay(options.options),
     disclosure_block,
     explanation,
     mechanic_sentences: sentences,

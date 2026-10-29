@@ -5,7 +5,7 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 17:08 PDT
+Last updated: 2026-10-28 17:12 PDT
 
 ## Waves
 
@@ -14,10 +14,10 @@ Last updated: 2026-10-28 17:08 PDT
 | 1A | 0 | `samples/` (three PDFs, OCR file, ground truth) and `scripts/samples/` (items 65 to 67, 69 to 71) | done | `996ec3c` |
 | 1B | 1 | Skeleton: root config, `shared/`, store, commands, audit log, routes, mocks, placeholder web, `tests/commands.test.ts` (items 1 to 7, 9, 10, 11 reason codes, 12 to 20, 21a routes, 48a, 49, 50a, 51, 65) | done | `996ec3c` |
 | 1 close | - | Build, `npm test`, `/api/healthz`, create `.env` from the OpenRouter key, one codex review, filtered fix pass, commit, push | done: 15 fixes, 139 tests, pushed to GitLab `main` | `996ec3c` |
-| 2 | 2 | Calculator, catalog, disclosure template, surface types, golden tests (items 30 to 33, 74, 76) | done: 6 fixes, 157 tests, pushed | see git log |
-| 3 | 3 | Copilot end to end: 3A server (21a homeowner-view route, 22, 24 to 29, 34 to 38, 73, tests 75, 80, 81) and 3C web (52 to 57, 62 pulled forward from wave 4, 63, 64) | **running** as two Sonnet agents in parallel with the wave 2 fix pass | - |
+| 2 | 2 | Calculator, catalog, disclosure template, surface types, golden tests (items 30 to 33, 74, 76) | done: 6 fixes, 157 tests, pushed | `7672027` |
+| 3 | 3 | Copilot end to end: 3A server (21a homeowner-view route, 22, 24 to 29, 34 to 38, 73, tests 75, 80, 81) and 3C web (52 to 57, 62 pulled forward from wave 4, 63, 64) | built: 359 tests; smoke passes against OpenRouter; five live copilot turns exercised the guardrail; done: fix passes applied, 516 tests, browser walk clean (three live turns, homeowner view and back, audit) | committed with wave 5 |
 | 4 | 4 | README walkthrough (8), audit view (62), docs (82, 84, 85); CUJs 6 and 7 run | not started | - |
-| 5 | 5 | Document extraction and review: 5A server (11, 23, 25b, 39 to 47, 48b, 50b, 68, 78, 79; **running**, Sonnet, in parallel with wave 3 since its files are disjoint; the 21b hook and the router mount are applied by me after wave 3A lands) then 5B reviewer web (58 to 61) after 3C; 83 in wave 6 | **running** | - |
+| 5 | 5 | Document extraction and review: 5A server (11, 23, 25b, 39 to 47, 48b, 50b, 68, 78, 79; **running**, Sonnet, in parallel with wave 3 since its files are disjoint; the 21b hook and the router mount are applied by me after wave 3A lands) then 5B reviewer web (58 to 61); 83 in wave 6 | 5A built: fixture recorded live (text PDFs 9/9 fields, pay stub 7/7 with 6/6 located); hooks applied by me; review filtered (8 kept); fix pass done (fixture re-recorded); 5B reviewer screen built and driven end to end in a real browser (boxes on the right words, net pay not located, discrepancy sent, reply, resolve, complete); 516 tests | committed with wave 3 |
 | 6 | 6 | Eval runner (72) and judge cases, submission doc built-versus-described (86) and final trim, final README pass | not started | - |
 
 Each wave closes the same way: I build and run the suite myself, one independent codex review
@@ -147,6 +147,24 @@ Dropped:
   override must use `fixedSentenceForTerm`.
 * `FIXED_SENTENCE_FOR_TERM` added to the design's fixed-texts table.
 
+### Wave 3C (web) report
+
+* Built: `web/src/api.ts`, `stream.ts` (NDJSON reader and turn reducer), `conversation.ts`,
+  `present.ts`, `types.ts`, routes `ContractorView`, `HomeownerView`, `AuditView`, components
+  `ApplicationForm`, `CopilotPanel`, `OptionsTable`, `DisclosureBlockView`, `RoleTabs`,
+  `KeyBanner`, `styles.css`; 38 unit tests on the pure parts. Verified by the agent against the
+  live server with a script (every reply parses; submit blocked then succeeded; the
+  disabled-by-operator stream drives the panel state). No browser check yet: mine comes once 3A
+  lands.
+* Interpretations: the no-model button follows the design's `payment-options` route rather than
+  the brief's wording; options on the homeowner view are stable-sorted by term; chat state lives
+  in a module store (survives the trip to the homeowner view, not a reload).
+* Found a design inconsistency: the data model's message source carried only `message_id` while
+  the CUJs show the verbatim quote on the card. The design now reads `{ message_id, quote }`;
+  3A adds the field and the missing `proposals/:pid/edit` route the web client calls.
+* Left for the wave 3 fix pass: the proposal card should show `source.ref.quote` once it exists
+  (it shows the whole source message today); the submit 409 is unstructured (message only).
+
 ### Wave 3
 
 * 3A (server) and 3C (web) run in parallel against the contract in `shared/schemas.ts`; the
@@ -156,6 +174,144 @@ Dropped:
 * Left open from the wave 1 fix pass, minor: `/api/reset` duplicates the seed schema because
   `store.ts` does not export it; `PORT=abc` in `.env` falls back differently in the server and
   the Vite proxy.
+
+### Wave 3A (copilot server) report
+
+* Built: `server/llm/client.ts`, the two system prompts, `server/copilot/{tools,context,turn,
+  quote-verify,options}.ts`, the guardrail (`index`, `denylist` + `denylist.json`, `number-match`,
+  `judge`, `fallback`), `server/api/copilot.ts`, the homeowner-view and proposal-edit routes,
+  `scripts/smoke-api.ts` (`npm run smoke`), tests 75, 80, 81 plus `tests/turn.test.ts` (29 tests
+  against a scripted SDK client).
+* Smoke against OpenRouter: strict tool call with exact cents, prompt caching (4,144 cached
+  tokens on the second call), JSON output format for the judge. Probes: forced tool choice,
+  disabling thinking and assistant prefill are rejected (400) on Sonnet 5.5; citations together
+  with the output format are accepted on Haiku, contrary to the design's note.
+* Five live turns: options line at 2.8 s, explanation at 7.0 s; the out-of-scope reply for
+  "Will she be approved?"; a pre-approval instruction got the fixed reply; a name-and-ZIP turn
+  produced three quote-verified proposals and no "solar" proposal (the judge blocked the first
+  explanation as personal data, a false positive, and the regeneration passed). An earlier prompt
+  version showed the full block path: deny-list and number-match blocked while the judge passed,
+  both verdicts logged, one regeneration passed.
+* Found: the SDK appends `/v1/messages` to `ANTHROPIC_BASE_URL`, so the design's
+  `https://openrouter.ai/api/v1` would 404; the client strips a trailing `/v1` so either
+  spelling works. Design items 14 and 24 to be updated in the fix pass.
+* Interpretations to record in the design: the calculator is logged through `withToolCall`
+  (LIVE), not `withMock`; a judge outage alone goes straight to the fallback; a judge "pass"
+  with a category other than none counts as a block; number-match is a set check and cannot
+  tell "Option A's figure attached to Option B"; the proposed value is not checked against the
+  quote (the contractor confirms every proposal).
+
+### Wave 5A (extraction server) report
+
+* Built: `shared/document-schemas/*`, `server/prompts/extraction.system.md`,
+  `server/extraction/{positioned-text,match,prompt,extract,llm,score}.ts` and the two adapters,
+  `server/review/{derived,tasks,discrepancy,templates}.ts`, `server/api/review.ts`, the two
+  service mocks, `samples/extraction-fixture.json` (recorded live), `scripts/record-extraction-
+  fixture.ts`, tests 78, 79 plus `extract.test.ts` and `review-api.test.ts`.
+* Recording (Opus 5.5, effort medium, one call per document, 7 to 9 s each): pay stub 7/7
+  fields right, 6 located exact, net pay not located as engineered; estimate 5/5; scope letter
+  4/4. Thresholds (90% text, 80% located) met with margin. Boxes overlaid on the rendered pages
+  sit on the right words.
+* Found: structured outputs allow at most 16 union-typed members per schema, so item 43's
+  per-member nullable shape (42 on the pay stub) is rejected with 400; each field is now
+  nullable as a whole. Items 25b and 43 to be reworded in the fix pass.
+* Duplication to merge in the fix pass: `server/extraction/llm.ts` and `server/llm/client.ts`
+  both implement the extraction call.
+* The two hooks (review router mount, submit hook) applied by me; 360 tests.
+
+### Wave 5B (reviewer screen) report
+
+* Built: `web/src/routes/ReviewerView.tsx`, `DocumentViewer` (react-pdf page with the box
+  drawn as a positioned element from the server's fractional bbox and the rendered page size),
+  `ValueList`, `DiscrepancyPanel`, `review-api.ts`, `review-present.ts`, `review-types.ts`
+  (type-only imports from the server's task view), the Reviewer tab badge; 35 tests, some driving
+  the real review router with a scripted model.
+* Driven in a real browser against two live submissions: not-located acknowledgement then
+  confirm, box click, correct, flag, the derived income going from waiting to $61,100.00, the
+  discrepancy ($85,000.00 stated against $61,100.00, 28.12%), the templated question edited and
+  sent, the contractor's reply appearing without a reload, resolve, complete, badge cleared.
+* Interpretations: the stored `difference` is shown, not recomputed (the brief's "the screen
+  never computes" wins over item 61's wording); Resolve appears only after the question is sent;
+  the derived row offers Flag only.
+* Suggested for the final pass: a zod schema for the task view in `shared/`; the flag reason
+  list includes system-only codes a reviewer can pick.
+
+### Wave 3A fix pass report
+
+* All eight fixes landed with tests; a live turn confirmed `options_display` on the options
+  line and the homeowner props, digits-only figures in the explanation, and four proposals on the
+  CUJ 2 sentence with nothing wrongly dropped.
+* Interpretations written into the design (items 29 and 34): enum values are supported by the
+  quote "by meaning" ("10-year" supports a 120-month term; "Option A", "fixed" or "0%" support a
+  product), otherwise CUJ 2 would lose two of its five proposals; empty drafts are audited blocks.
+* Known limits kept: "N monthly payments" is read as a count, not a figure, so an invented "180
+  monthly payments" passes number-match; percents and terms keep the global rule (only money is
+  bound per option).
+* `tests/out-of-scope-reply.test.ts` makes one real model call on every `npm test` when a key is
+  present (by design, item 81); it skips with a printed reason without a key.
+
+### Wave 5A fix pass report
+
+* All eight fixes landed with tests. The fixture was re-recorded once (three Opus calls, all
+  `end_turn`): pay stub 7/7 fields and 6/6 located, estimate 5/5, scope letter 4/4; token counts
+  identical to the first recording, so the prompt had not changed. Each entry now carries a
+  `request_sha256` over the system prompt, the user prompt, the output schema and the indexed
+  text, and the replay test fails when any of them changes.
+* New: `withdrawVerifiedValue` (system actor, the derived income only) in `server/commands.ts`;
+  `server/review/single-flight.ts` for per-document in-flight extraction; idempotent task
+  opening that reuses an orphan queue issue and resumes a failed link.
+* Known and left: a discrepancy record raised before a correction stays open until its question
+  is sent and resolved (a second record is raised if the corrected figure is still outside
+  tolerance); decided rows still show no Correct button in the web until the row builder and the
+  reviewer screen change together (the API accepts the correction).
+
+### Wave 3C fix pass report
+
+* The crash on return was not an async effect but `window.scrollTo` returning a promise in
+  this Chrome, which React then called as a cleanup; the effect returns nothing now and an error
+  boundary wraps the routes. The other eleven fixes landed with tests (`web-sync`, `web-api`,
+  `web-render`, `web-homeowner-effect`), including the switch to the server's
+  `options_display` strings with a coverage rule (a reply missing an entry is refused like an
+  unreadable reply). My walk on the final tree: three live turns, homeowner view and back,
+  audit, no page errors.
+* Left for the final pass: the options table's APR column wraps mid-number at 1366 px; an unused
+  `.card-payment-detail` rule; `DisclosureBlockView` still returns null for a missing entry
+  (guarded above it).
+
+### Wave 3 and 5A reviews (codex, gpt-6.1)
+
+Browser walk (`scripts/ui-walk.mjs`, three live turns): the options table, the quote-backed
+proposal cards with submit blocked, the out-of-scope reply and the full homeowner view all
+render; the audit page shows 45 events with LIVE/MOCK badges, token counts and the judge's
+block-and-regenerate sequence. One blocker: "Back to application" left a blank page, traced on
+the dev build to an async `useEffect` in `HomeownerView` (React calls its returned promise as a
+cleanup) and no error boundary.
+
+Copilot server, 6 findings, all kept: spelled money and term wording ("350 dollars", "ten
+years") produced no figure token; number-match did not bind a figure to the option named in the
+sentence (the design's "$414.14 attached to Option A" case); a proposal's value was never checked
+against its verified quote ($40K proposed from a "$30K" quote); the judge verdict was parented to
+the copilot call instead of the judge call; empty drafts skipped the checks and fabricated a
+verdict; invalid calculator arguments never reached the contractor as the schema-invalid note.
+
+Web client, 12 findings, 11 kept: the client formatted cents and composed payment wording
+(design item 56 says it formats nothing: the server now sends `options_display` strings);
+missing per-option disclosures were silently skipped; every historical options table could open
+the homeowner view; cards showed the whole message instead of the verified quote; out-of-order
+mutation responses; submit enabled during a running turn; state not scoped to the application
+id; a fallback did not clear the explanation; overlapping bulk and single confirms; session id
+persisted across reloads (item 52 says per page load); the explanation footer was deduplicated
+away. Dropped: the Reviewer badge, which the reviewer-screen agent (5B) is building.
+
+Extraction, 8 findings, all kept: a flagged derived income stayed verified on the application;
+decided formula inputs could not be corrected later (4.4 step 6); overlapping extraction attempts
+for one document; a retried task opening created a second queue issue; per-field pointer and
+parse diagnostics were dropped from the completion event; the fixture replay was bound to the
+indexed lines but not to the prompt or schema; the recorder overwrote the committed fixture
+without a flag and logged document values.
+
+Deferred to the final pass: merging `server/extraction/llm.ts` into `server/llm/client.ts`
+(two agents would collide in one file now); the submit 409 stays unstructured.
 
 ## Decisions made during the build
 

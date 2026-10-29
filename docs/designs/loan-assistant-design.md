@@ -428,7 +428,7 @@ mocks behind typed interfaces for every box under External except Anthropic.
 ```text
 id, application_id, field_key, value,
 source: { kind: "message" | "box" | "formula",
-          ref: { message_id } | { document_id, page: number | null, bbox: {x, y, w, h} fractions | null, words: [...], quoted_text } | { formula, inputs: [proposal_id] } },
+          ref: { message_id, quote (the verified verbatim quote) } | { document_id, page: number | null, bbox: {x, y, w, h} fractions | null, words: [...], quoted_text } | { formula, inputs: [proposal_id] } },
 match?: { method: "exact" | "normalized" | "not_located" | "not_extracted", rejected_pointer?: boolean },
 state: "proposed" | "confirmed" | "edited" | "rejected" | "superseded",
 versions, audit_event_id, actor_id, confirmed_by?, confirmed_at?, located_by_reviewer?: boolean
@@ -1871,8 +1871,11 @@ template (item 32) and is the single source for prompts, tests and the submissio
 ##### 24. `server/llm/client.ts` (Create)
 
 *   **Layer / kind**: The single SDK import site.
-*   **Proposed Changes**: Constructs `new Anthropic({ maxRetries: 0 })` once if a key is present;
-    the SDK reads `ANTHROPIC_BASE_URL` itself, so no base URL is passed in code.
+*   **Proposed Changes**: Constructs `new Anthropic({ maxRetries: 0 })` once if a key is present.
+    The SDK reads `ANTHROPIC_BASE_URL` itself and appends `/v1/messages` to it, so the OpenRouter
+    value must be `https://openrouter.ai/api`; because the documented spelling ends in `/v1`,
+    the client strips a trailing `/v1` before handing the URL to the SDK (found during the build:
+    the unstripped value answered 404).
     Three functions, each taking `ctx` so the event it appends carries `application_id`,
     `session_id`, `turn_id` and `parent_event_id`: `copilotCall(ctx, { system, messages, tools
     })` (`client.messages.create`), `extractCall(ctx, { prompt, outputSchema })`
@@ -1948,7 +1951,8 @@ template (item 32) and is the single source for prompts, tests and the submissio
     *   `calculate_payment`: resolve the amount from the typed or confirmed `requested_loan_amount`
         when present (else the argument) and the term from `preferred_term_months` when present
         (else the argument, else the catalog term), recording `inputs_source` per input; call the
-        calculator through `withMock`; `storeOptions`; write the `options` line with the inputs
+        calculator through `withToolCall` (real in-process work, shown LIVE on the audit page; the
+        catalog read goes through `withMock`); `storeOptions`; write the `options` line with the inputs
         echoed through `formatMoney` and the term in months, `argument_label` set when either
         input came from an argument, the disclosure block as data and `CHAT_FOOTER`. Invalid tool
         arguments write a `proposals` line whose `note` is the `llm.schema_invalid` message; a
@@ -1970,6 +1974,13 @@ template (item 32) and is the single source for prompts, tests and the submissio
 *   **Tested by**: items 73 and 81.
 
 ##### 29. `server/copilot/quote-verify.ts` (Create)
+
+*   **Build note (2026-10-28)**: after the quote is verified, the value must be supported by
+    it: a money value equals the amount the quote states; a name or ZIP is contained in the
+    normalized quote; an enum is supported by meaning (a term by any figure equal to it, "10-year"
+    or "ten years"; a product by its label, its name or its mechanic words; a project type by a
+    word stem). Otherwise the proposal is dropped as `quote_not_verified` with the proposals-line
+    note. The copilot's checks match the extraction rule in 4.4 step 5.
 
 *   **Layer / kind**: Provenance primitive.
 *   **Proposed Changes**: `verifyQuote(quote, messageText)` applies `normalizeText` (item 12) to
@@ -2046,6 +2057,12 @@ template (item 32) and is the single source for prompts, tests and the submissio
     block because the parameter is required and non-nullable.
 
 ##### 34. `server/guardrail/index.ts` (Create)
+
+*   **Build note (2026-10-28)**: an empty or whitespace-only draft is an audited block (one
+    `guardrail.verdict` per layer with rationale `empty_draft`, no judge call), regenerated once,
+    then the fallback. A judge outage alone goes straight to the fallback; a judge "pass" with a
+    category other than none counts as a block. The judge's verdict event is parented to the
+    judge's own `model.call`.
 
 *   **Layer / kind**: Guardrail contract and orchestrator.
 *   **Proposed Changes**: `GuardrailCheck` interface `check(text, allowed) -> Verdict`.
@@ -2139,6 +2156,11 @@ template (item 32) and is the single source for prompts, tests and the submissio
 *   **Tested by**: item 78.
 
 ##### 43. `server/extraction/prompt.ts` (Create)
+
+*   **Build note (2026-10-28)**: structured outputs allow at most 16 union-typed members per
+    schema, so each field is `{ value, page, line, token_start, token_end, quoted_text } | null`
+    as a whole (six nullable members per field, 42 on the pay stub, is rejected with 400). The
+    same applies to item 25b's description of the output shape.
 
 *   **Layer / kind**: Prompt and output schema builder, F2 tier.
 *   **Proposed Changes**: `buildExtractionPrompt(schema, positionedText)` renders the slot

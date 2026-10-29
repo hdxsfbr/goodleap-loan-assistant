@@ -13,6 +13,8 @@ import { toErrorResponse } from "../errors.js";
 import { store } from "../store.js";
 import { PROJECT_ROOT, getVersions } from "../versions.js";
 import { createApplicationsRouter } from "./applications.js";
+import { createCopilotRouter } from "./copilot.js";
+import { createReviewRouter } from "./review.js";
 
 const DEFAULT_SEED_PATH = `${PROJECT_ROOT}samples/seed.json`;
 
@@ -77,6 +79,8 @@ export function createApiRouter(options: ApiRouterOptions = {}): Router {
   });
 
   router.use(createApplicationsRouter());
+  router.use(createCopilotRouter());
+  router.use(createReviewRouter());
 
   router.use("/api", notFound);
   router.use(errorHandler);

@@ -9,7 +9,7 @@
 // calculator (monthsAfterPromo), not from a subtraction here.
 
 import { formatApr, formatMoney } from "@shared/format";
-import type { DisclosureBlock, PaymentOption } from "@shared/schemas";
+import type { DisclosureBlock, OptionDisplay, PaymentOption } from "@shared/schemas";
 import { monthsAfterPromo } from "../payments/calculator.js";
 
 export const CHAT_FOOTER = "Estimates only. Not an offer of credit; subject to credit approval.";
@@ -28,6 +28,21 @@ export const SCHEDULE_LINE = {
   single: "{count} monthly payments of {payment}",
   promotional:
     "{promo_count} monthly payments of {promo_payment}, then {count} monthly payments of {payment}",
+} as const;
+
+/**
+ * The options table's cells, worded once here so no client formats a number: the payment per
+ * mechanic ("{promo_payment} a month for the first {promo} months, then {payment} a month" for a
+ * zero-intro option), the term in months and the APR through `formatApr`.
+ */
+export const OPTION_DISPLAY = {
+  payment: {
+    single: "{payment} a month",
+    deferred: "{payment} a month for {promo} months",
+    promotional: "{promo_payment} a month for the first {promo} months, then {payment} a month",
+  },
+  term: "{count} months",
+  term_one: "1 month",
 } as const;
 
 /** Printed for a deferred-interest option: what happens if the balance is not paid in full. */
@@ -107,6 +122,42 @@ function consequenceLine(option: PaymentOption): string | null {
     payment: formatMoney(consequence.payment_cents),
     months: String(monthsAfterPromo(option)),
   });
+}
+
+function paymentText(option: PaymentOption): string {
+  switch (option.mechanic) {
+    case "fixed":
+      return fill(OPTION_DISPLAY.payment.single, { payment: formatMoney(option.payment_cents) });
+    case "zero_intro":
+      return fill(OPTION_DISPLAY.payment.promotional, {
+        promo_payment: formatMoney(required(option.promo_payment_cents, option, "promo_payment_cents")),
+        promo: String(required(option.promo_months, option, "promo_months")),
+        payment: formatMoney(option.payment_cents),
+      });
+    case "deferred_interest":
+      return fill(OPTION_DISPLAY.payment.deferred, {
+        payment: formatMoney(option.payment_cents),
+        promo: String(required(option.promo_months, option, "promo_months")),
+      });
+  }
+}
+
+/**
+ * The options table cells for a set of options, one entry per option in the calculator's order:
+ * the payment wording, the term and the APR as the person reads them. Every figure printed is one
+ * of the option's `calculatorValues`.
+ */
+export function renderOptionsDisplay(options: readonly PaymentOption[]): OptionDisplay[] {
+  return options.map((option) => ({
+    label: option.label,
+    product_id: option.product_id,
+    payment_text: paymentText(option),
+    term_text:
+      option.term_months === 1
+        ? OPTION_DISPLAY.term_one
+        : fill(OPTION_DISPLAY.term, { count: String(option.term_months) }),
+    apr_text: formatApr(option.apr_bps),
+  }));
 }
 
 /**

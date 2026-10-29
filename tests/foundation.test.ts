@@ -363,7 +363,7 @@ describe("api routes", () => {
     proposeFieldValue(contractorCtx, {
       field_key: "requested_loan_amount",
       value: 4_000_000,
-      source: { kind: "message", ref: { message_id: message.id } },
+      source: { kind: "message", ref: { message_id: message.id, quote: "Make it forty." } },
     });
     await serve(async (base) => {
       const view = ApplicationViewSchema.parse(await (await fetch(`${base}/api/applications/${APP}`)).json());
