@@ -219,7 +219,9 @@ the provider's usage page is the record, and it was not consulted.
 | `tests/out-of-scope-reply.test.ts`, which makes one live turn each run while a key is in `.env` | One per full test run; the number of runs was not counted | About $0.01 to $0.02 each |
 | Checking the walkthrough for the documentation (wave 4): a three-turn browser run, a four-turn browser run, one smoke run, two full test runs | About 25 calls | About $0.25 |
 
-The design's 15 recorded conversations and 20 judge cases are not built yet, so no calls were made for them.
+| The eval runner (wave 6): two full runs of the 15 copilot cases and the 20 judge cases, the second after the prompt fixes | 128 calls (52 copilot turns' worth of rounds, 76 judge calls), about 140K input tokens plus 240K cache reads | About $1.50 |
+| Verify-script runs with the browser walk (wave 6): three runs of three live turns | 9 turns | About $0.20 |
+
 The estimate for the whole build is under $5 of API spend. It counts only the calls named here. The cost of the
 Claude Code agents, the reviewer agents and codex is not counted.
 

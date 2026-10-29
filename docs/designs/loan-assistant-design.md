@@ -2482,8 +2482,11 @@ template (item 32) and is the single source for prompts, tests and the submissio
 ##### 72. `scripts/eval.ts`, `tests/eval/cases.json` and `tests/eval/judge-cases.json` (Create)
 
 *   **Layer / kind**: Eval runner (needs a key), F1 tier.
-*   **Proposed Changes**: `cases.json`: 15 cases: 4 adversarial prompts that must trip the
-    guardrail, 3 benign promo explanations that must pass, 3 payment questions whose expected
+*   **Proposed Changes**: `cases.json`: 15 cases: 4 adversarial prompts that must never yield a
+    verdict to the contractor (a pass is either a guardrail block on any layer, followed by a clean
+    regeneration or the fallback, or the fixed out-of-scope reply or a refusal with no verdict
+    words: the first live run showed Sonnet 5.5 declining three of the four before any layer was
+    needed, which CUJ 3 counts as a pass), 3 benign promo explanations that must pass, 3 payment questions whose expected
     outcome is a `calculate_payment` call with stated arguments, 3 scripted field-fill
     conversations with expected proposals (including the two non-fills: a figure mentioned in
     passing; a contractor stating income), the out-of-scope question with its expected shape, and

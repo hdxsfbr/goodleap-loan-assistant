@@ -240,7 +240,7 @@ produced once by a script.
 | Missing-key banner, retry, kill switches | Built | `web/src/components/KeyBanner.tsx`, `server/config.ts` |
 | Document extraction with boxes, the reviewer screen, discrepancy question to the contractor | Built at reduced depth; runs with a key or from the recorded fixture | `server/extraction/`, `server/review/`, `web/src/routes/ReviewerView.tsx`, [docs/states.md](docs/states.md) |
 | Evaluation: calculator, deny-list, number check, template, extraction replay | Built | [docs/evals.md](docs/evals.md) |
-| Evaluation: 15 recorded copilot conversations, 20 judge cases, `npm run eval` | Not yet built (`npm run eval` and `npm run eval:judge` do not work yet) | [docs/evals.md](docs/evals.md) |
+| Evaluation: 15 recorded copilot conversations and 20 judge cases, `npm run eval` (needs a key) | Built; live run on 2026-10-28: 15 of 15 copilot cases passed, judge recall 10 of 10 and 0 of 10 false positives | [docs/evals.md](docs/evals.md), `scripts/eval.ts`, `tests/eval/` |
 | Credit decision engine, Plaid, catalog, contractor profile, documents, review queue | Mocked behind typed interfaces; the credit engine is never called | `server/services/` |
 | AWS Textract, the SQS consumer, the Jira Service Management update, per-contractor flags, pgvector retrieval, token streaming of prose, a judge from a different model, the audit timeline view, a per-field tolerance table | Described only | [design](docs/designs/loan-assistant-design.md) sections 10 and 13, and its Future Improvements |
 
@@ -252,6 +252,8 @@ The build log, [docs/build-log.md](docs/build-log.md), records what each wave bu
 | --- | --- |
 | `npm test` | Runs every test with vitest. No key needed. One test makes a live model call when a key is in `.env`. |
 | `npm run build` | Type-checks the server and the web app and builds the web app. |
+| `npm run eval` | Needs a key. Runs the 15 recorded copilot conversations against the real model and checks each expectation (tool calls, proposals and non-proposals, the fixed replies, the guardrail path); `-- --judge` adds the 20 judge cases, `-- --judge-only` runs only those, `-- --only <id>` one case, `-- --json <path>` writes the full results, `-- --list` needs no key. Exit code 1 on any failure, 2 without a key. About 60 model calls and 90 seconds per full run. |
+| `bash scripts/verify.sh` | Builds, runs the suite, boots a throwaway server on port 3470, checks its health endpoint, and runs the browser walk when Google Chrome and `playwright-core` are present (`--no-walk` skips it, `--port` and `--out` change the port and the output directory). One summary line per step. |
 | `npm run smoke` | Needs a key. Checks, against the real endpoint, a strict tool call, prompt caching and the judge's block and pass. Add `-- --probes` for the API behavior probes. Without a key it prints SKIP. |
 | `node scripts/ui-walk.mjs` | Drives the running app in headless Chrome through chat turns, the homeowner view and the audit page, saving a screenshot after each step. Needs the server running, Google Chrome and `playwright-core` (not a project dependency: `NODE_PATH=<dir with node_modules/playwright-core>`). Flags are listed at the top of the file. |
 | `scripts/review-bundle.sh` | Prints the uncommitted changes, or named files, plus chosen line ranges of the design, as one text stream for an independent reviewer. |
@@ -260,9 +262,11 @@ The build log, [docs/build-log.md](docs/build-log.md), records what each wave bu
 
 ## Test results
 
-On 2026-10-28 at 17:14, `npm test` passed: 23 test files and 516 tests, in about 3.3 seconds, with a key in
-`.env` (so the out-of-scope reply test made its one live model call). Without a key that one test is skipped.
-The build log has the counts after each wave.
+On 2026-10-28, `npm test` passed: 24 test files and 558 tests, with a key in `.env` (so the out-of-scope
+reply test made its one live model call). Without a key that one test is skipped. The same day
+`npm run eval -- --judge` passed 15 of 15 copilot cases and the judge set (recall 10 of 10, false positives
+0 of 10) in 62 model calls, and `bash scripts/verify.sh` passed every step including the browser walk. The
+build log has the counts after each wave.
 
 ## Repository layout
 

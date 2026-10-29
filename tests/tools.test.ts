@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillableFields } from "@shared/application-schema";
+import { fillableFields, fieldDef, TERM_MONTH_OPTIONS } from "@shared/application-schema";
 import { PRODUCT_IDS } from "@shared/catalog-ids";
 import {
   CALCULATE_PAYMENT,
@@ -29,6 +29,22 @@ describe("copilot tools", () => {
     expect(FILLABLE_FIELD_IDS).toEqual(fillableFields().map((field) => field.id));
     // The decision-engine inputs are never offered to the model.
     expect(properties(PROPOSE_FIELD_FILL).field?.enum).not.toContain("stated_annual_income");
+  });
+
+  it("tells the model that a named term fills preferred_term_months, with the allowed months and the product ids", () => {
+    const description = byName(PROPOSE_FIELD_FILL).description ?? "";
+    // The values come from the schema the form stores them in, not from a copy.
+    expect(fieldDef("preferred_term_months")?.options).toEqual([...TERM_MONTH_OPTIONS]);
+    expect(description).toContain("preferred_term_months");
+    expect(description).toContain('"the 10-year option"');
+    for (const months of TERM_MONTH_OPTIONS) expect(description, months).toContain(months);
+    expect(description).toContain("10 years is 120");
+    for (const id of PRODUCT_IDS) expect(description, id).toContain(id);
+    expect(description).toContain("Option A");
+    // The value stays a plain string for strict mode; its description repeats the month rule.
+    const value = properties(PROPOSE_FIELD_FILL).value;
+    expect(value?.type).toBe("string");
+    expect(String(value?.description)).toContain("preferred_term_months");
   });
 
   it("generates the calculate_payment product enum from PRODUCT_IDS", () => {

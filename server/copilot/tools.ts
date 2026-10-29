@@ -5,14 +5,24 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { fillableFields } from "@shared/application-schema";
-import { PRODUCT_IDS } from "@shared/catalog-ids";
+import { fillableFields, TERM_MONTH_OPTIONS } from "@shared/application-schema";
+import { PRODUCT_IDS, type ProductId } from "@shared/catalog-ids";
 
 export const CALCULATE_PAYMENT = "calculate_payment";
 export const PROPOSE_FIELD_FILL = "propose_field_fill";
 
 /** The fields the copilot may propose, in schema order. */
 export const FILLABLE_FIELD_IDS: readonly string[] = fillableFields().map((field) => field.id);
+
+/** One phrase per product id for the tool description. A new product id fails to compile until it has one. */
+const PRODUCT_PHRASES: Record<ProductId, string> = {
+  fixed_10y: "Option A, the 10-year fixed-rate loan",
+  zero_intro_18m: "Option B, the 0% introductory-period loan",
+  deferred_12m: "Option C, the deferred-interest loan",
+};
+
+const TERM_VALUES = TERM_MONTH_OPTIONS.join(", ");
+const PRODUCT_VALUES = PRODUCT_IDS.map((id) => `${id} (${PRODUCT_PHRASES[id]})`).join("; ");
 
 const calculatePayment: Anthropic.Tool = {
   name: CALCULATE_PAYMENT,
@@ -51,7 +61,11 @@ const proposeFieldFill: Anthropic.Tool = {
   description:
     "Suggests a value for one application field from something the contractor stated as fact. The contractor " +
     "confirms or dismisses every suggestion. Use it only for declarative statements, never for questions, " +
-    "conditionals or guesses, and quote the contractor's own words exactly as typed.",
+    "conditionals or guesses, and quote the contractor's own words exactly as typed. " +
+    "A term the contractor names (\"the 10-year option\", \"ten years\", \"120 months\") fills " +
+    `preferred_term_months with its value in months, one of ${TERM_VALUES} (10 years is 120); make that call ` +
+    "as well as the selected_product_id call when the same words also name a product. " +
+    `selected_product_id takes one of: ${PRODUCT_VALUES}.`,
   strict: true,
   input_schema: {
     type: "object",
@@ -64,7 +78,8 @@ const proposeFieldFill: Anthropic.Tool = {
       value: {
         type: "string",
         description:
-          "The value as the contractor stated it, as text: a dollar amount such as $30K, a project type, a name, a ZIP code.",
+          "The value as the contractor stated it, as text: a dollar amount such as $30K, a project type, a name, a ZIP code. " +
+          `For preferred_term_months, the months as digits (${TERM_VALUES}); for selected_product_id, the product id.`,
       },
       message_id: {
         type: "string",
