@@ -636,6 +636,12 @@ input[type="checkbox"] {
   gap: 8px;
 }
 
+.slots-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .slots {
   list-style: none;
   margin: 10px 0 0;
@@ -645,9 +651,11 @@ input[type="checkbox"] {
 
 .slots li {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 8px 12px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--divider);
 }
 
@@ -655,13 +663,46 @@ input[type="checkbox"] {
   border-bottom: 0;
 }
 
+.slot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .slot-label {
   color: var(--text);
   font-weight: 600;
 }
 
+.slot-file {
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+
 .slot-empty {
   color: var(--muted);
+}
+
+.slot-attach {
+  position: relative;
+  flex: none;
+}
+
+.slot-attach:focus-within {
+  outline: 3px solid var(--orange-2);
+  outline-offset: 2px;
+}
+
+.slot-attach.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.slot-error {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .submit-row {

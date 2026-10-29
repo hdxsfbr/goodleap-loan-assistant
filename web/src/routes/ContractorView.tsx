@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
-import type { ApplicationView, DocumentSlot } from "@shared/schemas";
+import type { ApplicationView } from "@shared/schemas";
 import {
   confirmAll,
   confirmProposal,
@@ -11,19 +11,19 @@ import {
   replyToDiscrepancy,
   setField,
   submitApplication,
+  uploadDocument,
 } from "../api";
 import { ApplicationForm, type FormActions } from "../components/ApplicationForm";
 import { CopilotPanel } from "../components/CopilotPanel";
+import { DocumentSlots } from "../components/DocumentSlots";
 import { REVIEWED_LABEL, SUBMITTED_LABEL } from "../copy";
 import { toErrorBody } from "../errors";
 import { useConversation } from "../hooks";
-import { documentName, SLOT_LABELS, submitGate } from "../present";
+import { submitGate } from "../present";
 import { DEFAULT_APPLICATION_ID } from "../routes";
 import { exchangeForMessage } from "../stream";
 import { createViewSync, type SyncActivity } from "../sync";
 import type { SourceFocus } from "../types";
-
-const SLOTS: readonly DocumentSlot[] = ["pay_stub", "estimate", "scope_letter"];
 
 /**
  * The contractor tab: the application form beside the assistant. Everything on it belongs to one
@@ -170,7 +170,10 @@ function ContractorWorkspace({ applicationId }: { applicationId: string }) {
             onShowSource={(messageId) => setFocus((previous) => ({ message_id: messageId, nonce: (previous?.nonce ?? 0) + 1 }))}
           />
 
-          <DocumentSlots view={view} />
+          <DocumentSlots
+            view={view}
+            onUpload={(slot, file) => write(() => uploadDocument(applicationId, slot, file))}
+          />
 
           <StatusArea
             view={view}
@@ -186,29 +189,6 @@ function ContractorWorkspace({ applicationId }: { applicationId: string }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function DocumentSlots({ view }: { view: ApplicationView }) {
-  return (
-    <section className="slots-card" aria-labelledby="documents-title">
-      <h2 id="documents-title">Documents</h2>
-      <ul className="slots">
-        {SLOTS.map((slot) => {
-          const attached = view.documents.find((document) => document.slot === slot);
-          return (
-            <li key={slot}>
-              <span className="slot-label">{SLOT_LABELS[slot]}</span>
-              {attached ? (
-                <span className="slot-file">{documentName(attached.file_ref)}</span>
-              ) : (
-                <span className="slot-empty">Not attached</span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
 

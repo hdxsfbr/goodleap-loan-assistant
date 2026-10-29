@@ -39,6 +39,14 @@ export interface StoredFile {
 /** Document management: the files behind an application's document slots. */
 export interface DocumentsService {
   getFile(documentId: string): Promise<StoredFile>;
+  /**
+   * Keeps the bytes of a file the contractor attached, under the id of the document that will
+   * carry it, and returns the `file_ref` for that document's record. `name` is the file's name as
+   * the contractor knows it.
+   */
+  putFile(documentId: string, name: string, bytes: Uint8Array): Promise<{ file_ref: string; size_bytes: number }>;
+  /** Forgets a file stored with `putFile`. Safe to call for an id that holds none. */
+  removeFile(documentId: string): Promise<void>;
 }
 
 /** The review queue of record (Jira Service Management). */

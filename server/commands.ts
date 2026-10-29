@@ -736,26 +736,55 @@ export function submitApplication(ctx: Ctx): string[] {
   return [...app.document_ids];
 }
 
-/** The only emitter of `document.attached`. One document per slot. */
-export function attachDocument(
+/** What the caller knows about a document beyond its slot, reader and file. */
+export interface DocumentMeta {
+  pages?: DocumentRecord["pages"];
+  positioned_text_ref?: string;
+  /**
+   * An id from `reserveDocumentId()`, for a caller that must store the file under the id before
+   * the record exists. Without it the command takes the next id itself.
+   */
+  document_id?: string;
+}
+
+const DOCUMENT_ID_PATTERN = /^doc_\d+$/;
+
+/** The next document id, for a file that has to be stored under it before the document is attached. */
+export function reserveDocumentId(): string {
+  return nextId("doc");
+}
+
+/**
+ * The shared body of `attachDocument` and `replaceDocument`. With `replacing` the slot's current
+ * document leaves the store and the application's document ids, and the new record takes its
+ * place in the list; the audit event names the document it replaced.
+ */
+function putDocument(
   ctx: Ctx,
   slot: DocumentSlot,
   file_ref: string,
   adapter: DocumentAdapter,
-  meta: { pages?: DocumentRecord["pages"]; positioned_text_ref?: string } = {},
-): { document: DocumentRecord; event_id: string } {
+  meta: DocumentMeta,
+  replacing: boolean,
+): { document: DocumentRecord; replaced: DocumentRecord | null; event_id: string } {
   const app = requireApplication(ctx);
   requireDraft(app, "Documents can't be attached");
   parseOrThrow(DocumentSlotSchema, slot, "That is not a document slot.");
   parseOrThrow(DocumentAdapterSchema, adapter, "That is not a known document reader.");
   const state = storeWriter();
-  const taken = [...state.documents.values()].some(
-    (d) => d.application_id === app.id && d.slot === slot,
-  );
-  if (taken) throw new CommandError("A document is already attached to that slot.");
+  const current = [...state.documents.values()].find((d) => d.application_id === app.id && d.slot === slot);
+  if (!replacing && current) throw new CommandError("A document is already attached to that slot.");
+  if (replacing && !current) throw new CommandError("There is no document in that slot to replace.");
+  if (meta.document_id !== undefined && (!DOCUMENT_ID_PATTERN.test(meta.document_id) || state.documents.has(meta.document_id))) {
+    throw new CommandError("That is not a free document id.");
+  }
 
-  const id = nextId("doc");
-  const event = audit.emit(ctx, "document.attached", { document_id: id, slot, adapter });
+  const id = meta.document_id ?? nextId("doc");
+  const event = audit.emit(
+    ctx,
+    "document.attached",
+    compact({ document_id: id, slot, adapter, replaces: current?.id }),
+  );
   const document: DocumentRecord = {
     id,
     application_id: app.id,
@@ -766,9 +795,51 @@ export function attachDocument(
     adapter,
     extraction_status: "pending",
   };
-  state.documents.set(id, document);
-  app.document_ids.push(id);
-  return { document: copy(document), event_id: event.event_id };
+  if (current) {
+    // The new record takes the old one's place in both lists, so the order of the slots holds.
+    const entries = [...state.documents].map(([key, value]): [string, DocumentRecord] =>
+      key === current.id ? [id, document] : [key, value],
+    );
+    state.documents.clear();
+    for (const [key, value] of entries) state.documents.set(key, value);
+    const position = app.document_ids.indexOf(current.id);
+    if (position >= 0) app.document_ids.splice(position, 1, id);
+    else app.document_ids.push(id);
+  } else {
+    state.documents.set(id, document);
+    app.document_ids.push(id);
+  }
+  return { document: copy(document), replaced: current ? copy(current) : null, event_id: event.event_id };
+}
+
+/** The only emitter of `document.attached` for an empty slot. One document per slot. */
+export function attachDocument(
+  ctx: Ctx,
+  slot: DocumentSlot,
+  file_ref: string,
+  adapter: DocumentAdapter,
+  meta: DocumentMeta = {},
+): { document: DocumentRecord; event_id: string } {
+  const { document, event_id } = putDocument(ctx, slot, file_ref, adapter, meta, false);
+  return { document, event_id };
+}
+
+/**
+ * Puts a new document in a slot that already holds one, before the application is submitted. The
+ * old record is superseded: it leaves the store and the application's document ids, the new one
+ * takes its place in both lists, and `document.attached` carries `replaces: <old document id>`.
+ * Throws when the slot is empty or the application is not a draft.
+ */
+export function replaceDocument(
+  ctx: Ctx,
+  slot: DocumentSlot,
+  file_ref: string,
+  adapter: DocumentAdapter,
+  meta: DocumentMeta = {},
+): { document: DocumentRecord; replaced: DocumentRecord; event_id: string } {
+  const { document, replaced, event_id } = putDocument(ctx, slot, file_ref, adapter, meta, true);
+  if (!replaced) throw new CommandError("There is no document in that slot to replace.");
+  return { document, replaced, event_id };
 }
 
 /** Records how extraction ended for one document. A document leaves `pending` once. */

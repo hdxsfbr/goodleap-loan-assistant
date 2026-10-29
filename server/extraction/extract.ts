@@ -159,7 +159,11 @@ async function runExtraction(ctx: Ctx, documentId: string, deps: ExtractDeps): P
     console.error(`Extraction could not read ${doc.id}:`, err instanceof Error ? err.message : err);
     return finish(ctx, doc, "failed", [], "internal");
   }
-  if (wordCount(text) === 0) return finish(ctx, doc, "failed", [], "internal");
+  if (wordCount(text) === 0) {
+    // A scan or a picture inside a PDF: the text layer is empty, so there is nothing to select
+    // from. The model is not called; the reviewer reads the page.
+    return finish(ctx, doc, "failed", [], doc.adapter === "pdfjs" ? "extraction.no_text_layer" : "internal");
+  }
 
   const request = buildExtractionRequest(schema, text);
   const mode: ExtractionMode = deps.mode ?? (config.hasLlmKey ? "live" : "fixture");

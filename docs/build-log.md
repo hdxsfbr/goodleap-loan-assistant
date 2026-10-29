@@ -422,6 +422,43 @@ advisories, no CI.
   server by port (a previous run's `tsx` child had outlived `npm start` and blocked the port).
 * Every commit on GitLab `main`; the working tree is clean after the final commit.
 
+### Upload control
+
+After the final state above, the one gap the requirements audit had disclosed rather than fixed
+(documents came only from "Load demo project") was closed with a prototype file picker that stands
+in for the portal's production upload. It does not change what the design describes for production.
+
+* **Route.** `POST /api/applications/:id/documents/:slot` takes the PDF as the raw body
+  (`express.raw`, 10 MB, this route only) and the file name, percent-encoded, in `x-file-name`. The
+  application, the slot and the draft state are checked before the body is read; then the body
+  must start with `%PDF-` and be 1 byte to 10 MB. Refusals are `{ code: "internal", message,
+  retryable: false }`: 400 for a bad file (including a body over the limit), 404 for an unknown
+  application or slot, 409 after submit. The reply is the application view.
+* **Storage.** `server/uploads.ts` reserves the document id, has the documents service keep the bytes
+  as `data/uploads/<document_id>.pdf` (gitignored, emptied at boot), and only then calls the command,
+  so a failed write leaves no record. The record's `file_ref` is `uploads/<sanitized name>` and the
+  reader is always `pdfjs`; the `uploads/` prefix is what tells the documents mock an attached file
+  from a bundled sample, so `GET /api/documents/:id/file` and the extraction adapter read either.
+* **Replace.** A second file for a slot in draft goes through the new `replaceDocument` command: the
+  old record leaves the store and the application's document ids (the new one takes its position),
+  its file is deleted, and `document.attached` carries the optional `replaces: <old document id>`.
+  The new file has a new document id, so the browser's cache of the old file's URL cannot show it.
+  `attachDocument` still refuses a second document for a slot.
+* **No text layer.** A PDF whose text layer holds no words used to fail with `internal`. Extraction
+  now stops before the model call and ends the document `failed` with the new error code
+  `extraction.no_text_layer` ("This PDF has no readable text layer, so it is marked for manual
+  reading."); no proposals are made and the review task flags the slot for manual reading, as it does
+  for any failed document. The committed pay stub is a picture, so attached through the picker it
+  takes this path; "Load demo project" still attaches it with the `ocr_fixture` adapter and its
+  recorded OCR output, which is why the walkthrough's pay stub boxes come from the demo loader.
+* **Web.** The Documents card shows each slot's file name or "No file attached", with Attach (Replace
+  when a file is present) as a styled label over a visually hidden file input, "Uploading..." while
+  the file is on its way, the server's sentence under the slot on a refusal, and disabled controls
+  after submit. The row rules are the pure function `slotRow` in `web/src/present.ts`.
+* **Tests.** `tests/upload.test.ts` (route contract, replace, after submit, the picture-only pay
+  stub through extraction to the review task) and `tests/web-upload.test.ts` (row rules, the card's
+  markup, the request the page sends).
+
 ## Decisions made during the build
 
 | Date | Decision | Why |

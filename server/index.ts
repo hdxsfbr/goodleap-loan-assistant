@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import express from "express";
 import { createApiRouter } from "./api/index.js";
 import { createAuditLog, createFileSink, installAuditLog } from "./audit-log.js";
 import { config } from "./config.js";
 import { loadEnvFile } from "./load-env.js";
+import { UPLOADS_DIR } from "./services/documents/mock.js";
 import { store } from "./store.js";
 import { getVersions } from "./versions.js";
 
@@ -14,6 +15,9 @@ import { getVersions } from "./versions.js";
 loadEnvFile();
 
 mkdirSync("data", { recursive: true });
+// Attached files belong to the in-memory records of the run that took them, like the audit file.
+rmSync(UPLOADS_DIR, { recursive: true, force: true });
+mkdirSync(UPLOADS_DIR, { recursive: true });
 installAuditLog(createAuditLog(createFileSink("data/audit.jsonl", { truncate: true })));
 store.loadSeed();
 

@@ -64,3 +64,9 @@ Last full run, 2026-10-28 18:28  (after the requirements-audit fixes), from `bas
 The eval run and the fresh clone above predate the audit fixes by about an hour; the audit fixes added
 the actuarial APR, the product range and the contractor-question split, each with its own tests, and the
 "$40K" eval case was re-run live on its own after the split (passed).
+
+## After the restyle and the upload control
+
+2026-10-28 19:43 : `npm run build` exit 0; `npm test` 26 files, 619 tests passed, 0 failed (31 new tests cover the
+upload route, the replace rule, the no-text-layer rule and the slot controls). The restyle added no
+tests and changed none.

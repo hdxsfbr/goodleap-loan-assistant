@@ -8,6 +8,7 @@ import {
   OptionsLineSchema,
   type ApplicationView,
   type AuditResponse,
+  type DocumentSlot,
   type FieldEditRequest,
   type HealthResponse,
   type HomeownerViewProps,
@@ -39,11 +40,11 @@ export function getSessionId(): string {
   return sessionId;
 }
 
-function headers(hasBody: boolean): Record<string, string> {
+function headers(hasBody: boolean, contentType = "application/json"): Record<string, string> {
   return {
     "x-session-id": getSessionId(),
     accept: "application/json",
-    ...(hasBody ? { "content-type": "application/json" } : {}),
+    ...(hasBody ? { "content-type": contentType } : {}),
   };
 }
 
@@ -58,18 +59,29 @@ async function errorFromResponse(response: Response): Promise<ApiError> {
   return new ApiError(UNREADABLE_REPLY_ERROR, response.status);
 }
 
+/** A file sent as the request body instead of JSON. */
+interface FileUpload {
+  file: Blob;
+  contentType: string;
+  /** Sent in `x-file-name`, percent-encoded because a header holds only Latin-1 text. */
+  fileName: string;
+}
+
 async function request<S extends z.ZodTypeAny>(
   method: "GET" | "POST",
   path: string,
   schema: S,
   body?: unknown,
+  upload?: FileUpload,
 ): Promise<z.infer<S>> {
   let response: Response;
   try {
     response = await fetch(path, {
       method,
-      headers: headers(body !== undefined),
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      headers: upload
+        ? { ...headers(true, upload.contentType), "x-file-name": encodeURIComponent(upload.fileName) }
+        : headers(body !== undefined),
+      ...(upload ? { body: upload.file } : body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
     throw new ApiError(CONNECTION_ERROR, 0);
@@ -130,6 +142,17 @@ export function submitApplication(applicationId: string): Promise<ApplicationVie
 
 export function loadDemo(applicationId: string): Promise<ApplicationView> {
   return request("POST", `${app(applicationId)}/load-demo`, ApplicationViewSchema, {});
+}
+
+/** Attaches a PDF to a document slot, replacing the file already there. */
+export function uploadDocument(applicationId: string, slot: DocumentSlot, file: File): Promise<ApplicationView> {
+  return request(
+    "POST",
+    `${app(applicationId)}/documents/${encodeURIComponent(slot)}`,
+    ApplicationViewSchema,
+    undefined,
+    { file, contentType: "application/pdf", fileName: file.name },
+  );
 }
 
 export function replyToDiscrepancy(applicationId: string, discrepancyId: string, text: string): Promise<ApplicationView> {

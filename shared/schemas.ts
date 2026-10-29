@@ -104,6 +104,7 @@ export const ErrorCodeSchema = z.enum([
   "catalog.schema_mismatch",
   "extraction.source_not_located",
   "extraction.document_type_mismatch",
+  "extraction.no_text_layer",
   "copilot.disabled",
   "internal",
 ]);
@@ -692,6 +693,8 @@ export const AuditEventSchema = z.discriminatedUnion("type", [
     document_id: z.string(),
     slot: DocumentSlotSchema,
     adapter: DocumentAdapterSchema,
+    /** The document this one took the slot from, when the contractor replaced a file before submitting. */
+    replaces: z.string().optional(),
   }),
   AuditBaseSchema.extend({
     type: z.literal("extraction.completed"),

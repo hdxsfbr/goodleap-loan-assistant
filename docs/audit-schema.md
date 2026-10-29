@@ -279,13 +279,16 @@ change, or null.
 
 #### `document.attached`
 
-A document was attached to a slot. Emitted by `attachDocument` (the "Load demo project" button).
+A document was attached to a slot. Emitted by `attachDocument` (the "Load demo project" button and
+the first file picked for a slot) and by `replaceDocument` (a later file picked for the same slot
+before submit, which carries `replaces`).
 
 | Field | Type | Required | PII |
 | --- | --- | --- | --- |
 | `document_id` | string | yes | - |
 | `slot` | `pay_stub` \| `estimate` \| `scope_letter` | yes | - |
 | `adapter` | `pdfjs` \| `ocr_fixture` | yes | - |
+| `replaces` | string: the id of the document this one took the slot from | no | - |
 
 #### `extraction.completed`
 

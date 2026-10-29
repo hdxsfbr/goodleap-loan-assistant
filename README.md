@@ -31,7 +31,9 @@ passes it; the extraction client exists twice (`server/extraction/llm.ts` beside
 and is merged after submission because merging changes the recorded fixture; the no-model button and the
 kill switches were verified from code and tests, not in a browser; every live run during the build went
 through OpenRouter, so the direct Anthropic path (same SDK, no base URL) was not exercised; documents come
-from "Load demo project" (there is no upload control); two of the last live eval turns took 11 to 12
+from "Load demo project" or from the file picker, which stands in for the portal's upload; a PDF with no
+text layer is marked for manual reading because the only OCR output is the recorded one for the sample pay
+stub; two of the last live eval turns took 11 to 12
 seconds, over the 10 s p95 budget, because a judge-triggered regeneration doubled the model calls; the eval
 set has no prompt-injection case; `npm audit` reports three advisories in dependencies (one high) that were
 not addressed; there is no CI, so every number in this README comes from a local run on the date given and
@@ -109,6 +111,7 @@ run; the figures do not.
    form on the left, and the assistant on the right with three suggested prompts. Click **Load demo
    project**. It fills in roofing, a $30,000.00 project amount and requested loan amount, and a stated annual
    income of $85,000.00, and attaches three sample documents. The homeowner's name and ZIP code stay empty.
+   (The Documents card also takes your own files; step 9.)
 
 2. **Payment options in the chat (CUJ 1).** Type `They want the lowest monthly payment, what are the
    options?` and send it. The options table appears first, headed "Based on $30,000.00 over 120 months": Option
@@ -171,42 +174,52 @@ With a key set, submitting runs the model on each of the three documents, one af
 recorded calls took 5 to 9 seconds each), so the review task appears after a short wait. Without a key it
 appears at once.
 
-9. **Submit.** The form needs a homeowner first name, last name and ZIP code. If you skipped the chat steps,
-   click **Load demo project** and type them in (for example Dana, Lee and 94105). On the contractor tab click
-   **Submit application**. The form is locked and reads "Submitted, documents under review".
+9. **Attach documents.** The Documents card lists the pay stub, the project estimate and the scope letter. Each
+   shows its file name, or "No file attached" with an **Attach** button; with a file it reads **Replace**.
+   Click it and pick a PDF of up to 10 MB (for example `samples/estimate.pdf` and `samples/scope_letter.pdf`).
+   Picking another file for the same slot replaces the first until the form is submitted, and a file that is not
+   a PDF or is over 10 MB is refused with a message under the slot. After submit the buttons are disabled.
+   `samples/paystub.pdf` is a picture of a pay stub with no text layer: attached this way it has no recorded OCR
+   output, so after submit the reviewer sees it flagged "This document could not be read automatically. Read
+   it on the page." and reads it by hand. **Load demo project** attaches the same pay stub with its recorded
+   OCR output, which is the version with boxes in the steps below.
 
-10. **The reviewer tab.** Click **Reviewer** ("You are: GoodLeap reviewer"). The badge shows one open task. The
+10. **Submit.** The form needs a homeowner first name, last name and ZIP code. If you skipped the chat steps,
+    click **Load demo project** and type them in (for example Dana, Lee and 94105). On the contractor tab click
+    **Submit application**. The form is locked and reads "Submitted, documents under review".
+
+11. **The reviewer tab.** Click **Reviewer** ("You are: GoodLeap reviewer"). The badge shows one open task. The
     list shows the application, 3 documents, 16 values to decide and 0 open differences. Click **Review**.
 
-11. **Boxes on the page.** The left side lists values grouped by document, with a tab per document (pay stub,
+12. **Boxes on the page.** The left side lists values grouped by document, with a tab per document (pay stub,
     project estimate, scope of work letter). The right side shows the page with a box on the words each value
     was read from. Click a value and its box is highlighted; click a box and its value is selected. For each
     value you can **Confirm** it, **Correct** it (the box stays as where it was read from) or **Flag** it with
     a fixed reason.
 
-12. **A value that cannot be located.** On the pay stub, **Net pay** shows $1,812.40 with the badge "Not
+13. **A value that cannot be located.** On the pay stub, **Net pay** shows $1,812.40 with the badge "Not
     located", the words the model quoted and the caption "The value was extracted but its position on the page
     could not be matched. Find it on the page to confirm, correct it, or flag it." There is no box for it.
     Confirm stays disabled until you tick "I located this on the page myself".
 
-13. **A calculated value and a difference.** **Annualized income** says "Not calculated yet". Confirm **Gross
+14. **A calculated value and a difference.** **Annualized income** says "Not calculated yet". Confirm **Gross
     pay** ($2,350.00) and **Pay frequency** (Biweekly). The annualized income becomes $61,100.00, with its
     formula and the two values it was calculated from; the only action on it is Flag. A card opens under the
     values: "Annualized income differs from the application". It shows the stated annual income of $85,000.00
     beside $61,100.00, "Difference: $23,900.00 (28.12% of the application value)", the rule, and a question for
     the contractor, filled in from a template and editable. Click **Send to the contractor**.
 
-14. **The contractor's reply.** Open the **Contractor** tab. A banner reads "Needs clarification: a reviewer
+15. **The contractor's reply.** Open the **Contractor** tab. A banner reads "Needs clarification: a reviewer
     found a difference between a document and the application and has sent a question. No decision has been
     made.", with the question and a reply box. Type `She also has a second job; the stated income includes
     both` and click **Send reply**.
 
-15. **Resolve.** On the reviewer tab the reply appears on the record (the page checks every 5 seconds). Choose
+16. **Resolve.** On the reviewer tab the reply appears on the record (the page checks every 5 seconds). Choose
     **Explained**, add a note and click **Resolve**. (**Corrected** is for a reply that gives a corrected
     figure, which goes in the note; the stated value itself is changed through the portal's existing process,
     outside this system.)
 
-16. **Complete the review.** Confirm the remaining values. The estimate total is $31,000.00 and the requested
+17. **Complete the review.** Confirm the remaining values. The estimate total is $31,000.00 and the requested
     loan amount is $30,000.00, which is below it, so the estimate opens no difference. **Complete review**
     is enabled when every value has a decision; click it. The contractor tab reads "Documents reviewed". The
     audit tab now also shows the discrepancy events and ends with `review.completed` and
@@ -265,6 +278,7 @@ produced once by a script.
 | Guardrail: deny-list, figure check, judge, rewrite once, fallback | Built | `server/guardrail/`, `tests/denylist.test.ts`, `tests/number-match.test.ts`, `tests/turn.test.ts` |
 | Audit stream and audit page | Built | [docs/audit-schema.md](docs/audit-schema.md), `web/src/routes/AuditView.tsx` |
 | Missing-key banner, retry, kill switches | Built | `web/src/components/KeyBanner.tsx`, `server/config.ts` |
+| Document upload: a file picker per slot that stands in for the portal's upload | Built; replace before submit, PDF only, up to 10 MB | `server/uploads.ts`, `web/src/components/DocumentSlots.tsx`, `tests/upload.test.ts` |
 | Document extraction with boxes, the reviewer screen, discrepancy question to the contractor | Built at reduced depth; runs with a key or from the recorded fixture | `server/extraction/`, `server/review/`, `web/src/routes/ReviewerView.tsx`, [docs/states.md](docs/states.md) |
 | Evaluation: calculator, deny-list, number check, template, extraction replay | Built | [docs/evals.md](docs/evals.md) |
 | Evaluation: 15 recorded copilot conversations and 20 judge cases, `npm run eval` (needs a key) | Built; live run on 2026-10-28: 15 of 15 copilot cases passed, judge recall 10 of 10 and 0 of 10 false positives | [docs/evals.md](docs/evals.md), `scripts/eval.ts`, `tests/eval/` |

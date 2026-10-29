@@ -5,11 +5,13 @@ import type {
   ApplicationView,
   AuditEvent,
   DisclosureBlock,
+  DocumentSlot,
   FieldValue,
   OptionDisplay,
   PaymentOption,
   VersionsBlock,
 } from "@shared/schemas";
+import { BAD_FILE_MESSAGE, UPLOADING_LABEL } from "./copy";
 import type { DisclosureOption } from "./types";
 
 // Presenters: stored values as the words on the screen. The payment options are not formatted here:
@@ -159,6 +161,54 @@ export const SLOT_LABELS = {
   estimate: "Project estimate",
   scope_letter: "Scope letter",
 } as const;
+
+/** The largest file the Documents card sends; the server enforces the same limit. */
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/** The message for a picked file the server would refuse (not a PDF, empty or too large), else null. */
+export function pickedFileProblem(file: { name: string; size: number; type: string }): string | null {
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  return isPdf && file.size > 0 && file.size <= MAX_DOCUMENT_BYTES ? null : BAD_FILE_MESSAGE;
+}
+
+/** What one upload has done on the page so far. */
+export interface SlotProgress {
+  uploading: boolean;
+  /** The server's sentence for a refused file, until the next pick. */
+  error: string | null;
+}
+
+export interface SlotRow {
+  slot: DocumentSlot;
+  label: string;
+  /** The attached file's name, or null when the slot is empty. */
+  fileName: string | null;
+  /** The control's text: Attach, Replace, or Uploading... while a file is on its way. */
+  actionLabel: string;
+  /** False once the application is submitted and while a file is on its way. */
+  canPick: boolean;
+  /** Shown under the row; never after submission, when the slot can no longer change. */
+  error: string | null;
+}
+
+/** The rules for one row of the Documents card. */
+export function slotRow(
+  slot: DocumentSlot,
+  documents: ReadonlyArray<{ slot: DocumentSlot; file_ref: string }>,
+  status: ApplicationView["status"],
+  progress: SlotProgress = { uploading: false, error: null },
+): SlotRow {
+  const attached = documents.find((document) => document.slot === slot);
+  const draft = status === "draft";
+  return {
+    slot,
+    label: SLOT_LABELS[slot],
+    fileName: attached ? documentName(attached.file_ref) : null,
+    actionLabel: progress.uploading ? UPLOADING_LABEL : attached ? "Replace" : "Attach",
+    canPick: draft && !progress.uploading,
+    error: draft && !progress.uploading ? progress.error : null,
+  };
+}
 
 // ---------------------------------------------------------------------------------------------
 // Payment options

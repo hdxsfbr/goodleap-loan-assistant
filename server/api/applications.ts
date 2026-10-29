@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { Router } from "express";
+import express, { Router, type Request, type RequestHandler } from "express";
 import { fieldDef, zodForField } from "@shared/application-schema";
 import {
   ApplicationViewSchema,
   DiscrepancyReplyRequestSchema,
+  DocumentSlotSchema,
   FieldEditRequestSchema,
   HomeownerViewRequestSchema,
   ProposalRejectRequestSchema,
@@ -36,6 +37,7 @@ import { store } from "../store.js";
 import { PROJECT_ROOT, getVersions } from "../versions.js";
 import { contractorCtx, parseBody, requireApplication } from "./http.js";
 import { startDocumentReview, systemCtx } from "../extraction/extract.js";
+import { BAD_FILE_MESSAGE, MAX_UPLOAD_BYTES, attachUpload, requireOpenForUpload } from "../uploads.js";
 
 /**
  * The application as the form shows it: stored values with the live proposals merged in as
@@ -123,6 +125,19 @@ function homeownerViewFor(record: OptionsRecord): HomeownerViewProps {
   });
 }
 
+const parsePdfBody = express.raw({ type: "application/pdf", limit: MAX_UPLOAD_BYTES });
+
+/**
+ * Reads the request body as bytes when it is declared `application/pdf`. A body over the limit or
+ * one that cannot be read is the same 400 as a file that is not a PDF; any other content type
+ * leaves `req.body` unset, which the handler refuses the same way.
+ */
+const readPdfBody: RequestHandler = (req, res, next) => {
+  parsePdfBody(req, res, (err?: unknown) => {
+    next(err ? new CommandError(BAD_FILE_MESSAGE, { status: 400 }) : undefined);
+  });
+};
+
 export function createApplicationsRouter(): Router {
   const router = Router();
 
@@ -200,6 +215,26 @@ export function createApplicationsRouter(): Router {
     }
     res.json(buildApplicationView(req.params.id));
   });
+
+  // The prototype's file picker: the PDF is the raw body, its name travels in `x-file-name`
+  // (percent-encoded by the client). The application and slot are checked before the body is read.
+  router.post(
+    "/api/applications/:id/documents/:slot",
+    (req: Request<{ id: string; slot: string }>, _res, next) => {
+      const slot = DocumentSlotSchema.safeParse(req.params.slot);
+      requireApplication(req.params.id);
+      if (!slot.success) throw new CommandError("That is not a document slot.", { status: 404 });
+      requireOpenForUpload(req.params.id);
+      next();
+    },
+    readPdfBody,
+    async (req: Request<{ id: string; slot: string }>, res) => {
+      const ctx = contractorCtx(req, req.params.id);
+      const slot = DocumentSlotSchema.parse(req.params.slot);
+      await attachUpload(ctx, slot, req.header("x-file-name"), req.body);
+      res.json(buildApplicationView(req.params.id));
+    },
+  );
 
   router.post("/api/applications/:id/homeowner-view", (req, res) => {
     const ctx = contractorCtx(req, req.params.id);

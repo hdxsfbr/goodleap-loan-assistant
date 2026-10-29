@@ -164,7 +164,7 @@ describe("audit log", () => {
     ]) {
       expect(types).toContain(type);
     }
-    expect(ErrorCodeSchema.options).toHaveLength(14);
+    expect(ErrorCodeSchema.options).toHaveLength(15);
   });
 });
 

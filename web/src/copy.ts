@@ -39,3 +39,10 @@ export const CALCULATING_STATUS = "Calculating payments...";
 
 export const SUBMITTED_LABEL = "Submitted, documents under review";
 export const REVIEWED_LABEL = "Documents reviewed";
+
+/** The Documents card. */
+export const DOCUMENTS_HINT = "Attach each document as a PDF, up to 10 MB.";
+export const NO_FILE_LABEL = "No file attached";
+export const UPLOADING_LABEL = "Uploading...";
+/** The same sentence the server sends for a file it refuses. */
+export const BAD_FILE_MESSAGE = "Only PDF files up to 10 MB can be attached.";

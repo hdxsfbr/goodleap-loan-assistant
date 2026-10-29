@@ -77,6 +77,11 @@ const ERROR_TABLE: Record<ErrorCode, ErrorSpec> = {
     retryable: false,
     status: 422,
   },
+  "extraction.no_text_layer": {
+    message: "This PDF has no readable text layer, so it is marked for manual reading.",
+    retryable: false,
+    status: 422,
+  },
   "copilot.disabled": {
     message: "The assistant is disabled by operator.",
     retryable: false,

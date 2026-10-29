@@ -104,19 +104,22 @@ A document is attached to one of three slots (`pay_stub`, `estimate`, `scope_let
 | --- | --- | --- |
 | `pending` | Attached; not read yet. | The review task does not exist yet. |
 | `done` | Read; one proposal per field the model answered for. | A row per field, with a box where one could be drawn. |
-| `failed` | The document could not be read, or the model failed after one retry. | A note: "This document could not be read automatically. Read it on the page." No values. |
+| `failed` | The document could not be read, it is a PDF with no text layer (a scan), or the model failed after one retry. | A note: "This document could not be read automatically. Read it on the page." No values. |
 | `type_mismatch` | The model said the document is not the expected type. | A note that the document does not look like the expected type, so no values were read. |
 | `manual` | Extraction is switched off (`EXTRACTION_ENABLED=false`). | A note: "This document was not read automatically. Read it on the page." No values. |
 
 | From | To | Command | Audit event |
 | --- | --- | --- | --- |
-| (none) | `pending` | `attachDocument` | `document.attached` |
+| (none) | `pending` | `attachDocument` (an empty slot; draft only) | `document.attached` |
+| (none) | `pending` | `replaceDocument` (a slot that already holds a document; draft only). The old record is superseded: it leaves the application and its file is dropped | `document.attached`, with `replaces` naming the old document |
 | `pending` | `done`, `failed`, `type_mismatch` | `setExtractionStatus`, called by `extractDocument` | `extraction.completed`, with `per_field` and, for `failed` and `type_mismatch`, an `error_code` |
 | `pending` | `manual` | `setExtractionStatus`, called by `openReviewTask` when extraction is switched off | `extraction.completed` |
 
 A model failure (`llm.timeout`, `llm.rate_limited`, `llm.server_error`, `llm.schema_invalid`) gets one
 retry; `llm.auth_failed` and `llm.refusal` do not. A wrong document type uses
-`extraction.document_type_mismatch`. A value whose quote verified but whose words carry no position
+`extraction.document_type_mismatch`. A PDF whose text layer holds no words (a scan or a picture) is
+`failed` with `extraction.no_text_layer` before the model is called, so the reviewer reads it by hand;
+the sample pay stub avoids this only through its recorded OCR output, which the demo loader attaches. A value whose quote verified but whose words carry no position
 is kept as a proposal with match method `not_located` and the error code
 `extraction.source_not_located`; that is per value, not per document.
 

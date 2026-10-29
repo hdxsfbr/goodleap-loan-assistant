@@ -633,8 +633,10 @@ so every later comparison runs against confirmed values.
 
 1.  "Load demo project" attaches the three bundled documents to their slots through the
     `attachDocument` command (the single emitter of `document.attached`), with the documents
-    service storing the file. (A real upload control is a production feature: the existing
-    document management upload and its SQS message. The prototype has no file picker.) The submit
+    service storing the file. (The real upload control is a production feature: the existing
+    document management upload and its SQS message. The prototype has a file picker per slot that
+    stands in for it: it posts the PDF to the documents service and calls the same command, and a
+    second file for a slot replaces the first until the form is submitted.) The submit
     route enqueues the attached documents for extraction after `submitApplication` succeeds; in
     the prototype an in-process queue runs the same consumer code the production SQS consumer
     would.
@@ -831,6 +833,7 @@ feature 2 ships as design-only; there is no reduced-depth substitute.
 | `guardrail.judge_unavailable` | copilot | Fail closed on prose: fallback text, distinct outcome code |
 | `catalog.unavailable`, `catalog.schema_mismatch` | calculator | No options rendered; message names the service; `catalog.schema_mismatch` is a metric that must read zero |
 | `extraction.source_not_located` | extraction | Per value, not per document: proposal kept with quoted text; reviewer path in CUJ 4 |
+| `extraction.no_text_layer` | extraction | A PDF with no text layer (a scan): the model is not called, the document's `extraction_status` is `failed`, and the slot is flagged for manual reading (production sends such files to Textract) |
 | `extraction.document_type_mismatch` | extraction | The document's `extraction_status` is `type_mismatch`; the task is created without proposals for that slot and the reviewer sees the flag `wrong_document_type` |
 | `llm.auth_failed` | copilot, extraction | The key is present but rejected: the banner names the variable; the chat input is disabled with the same message; not retryable |
 | `copilot.disabled` | copilot | `COPILOT_ENABLED` is false: the panel renders "disabled by operator" |
@@ -1594,7 +1597,7 @@ template (item 32) and is the single source for prompts, tests and the submissio
         `ErrorCode` (`llm.missing_key`, `llm.auth_failed`, `llm.timeout`, `llm.rate_limited`,
         `llm.server_error`, `llm.refusal`, `llm.schema_invalid`, `guardrail.judge_unavailable`,
         `catalog.unavailable`, `catalog.schema_mismatch`, `extraction.source_not_located`,
-        `extraction.document_type_mismatch`, `copilot.disabled`, `internal`).
+        `extraction.document_type_mismatch`, `extraction.no_text_layer`, `copilot.disabled`, `internal`).
     *   `AuditEvent`: a `z.discriminatedUnion` on `type` with the base fields merged in
         (`schema_version: 1`), every type from Technical Plan section 3 including
         `message.received`, `review.task_created`, `discrepancy.sent`, and `model.call` with
@@ -2304,7 +2307,8 @@ template (item 32) and is the single source for prompts, tests and the submissio
 
 *   **Layer / kind**: In-process mocks, F2 tier.
 *   **Proposed Changes**: Documents serves the three bundled sample files from `samples/` by
-    document id; nothing is uploaded. Mock JSM implements `createIssue` and `addLink` with
+    document id, and the PDFs a contractor attaches from `data/uploads/` (a file picker stands in
+    for the portal's upload). Mock JSM implements `createIssue` and `addLink` with
     generated issue ids.
 
 #### Web (`web/`)
