@@ -1,0 +1,6 @@
+status after submit: documents_under_review
+task: task_1
+anonymous confirm recorded as actor: {'type': 'reviewer', 'id': 'rev_demo_001'} session: no-session
+audit events before reset: 41
+{"ok":true}
+audit events after reset: 0

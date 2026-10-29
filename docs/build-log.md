@@ -546,3 +546,6 @@ words either.
   workstreams and timeline, the load, data handling, code changes before production, and the
   decisions GoodLeap owns. Linked from the README's docs list and the deployment guide. Committed
   locally, not pushed.
+* 2026-10-29: project closed after the interviews. Pushed the production plan, the pre-change
+  audit (`docs/audit/`: system brief, ranked findings, captured evidence) and the `.omm/`
+  architecture notes. The local server is stopped. Nothing is in flight.

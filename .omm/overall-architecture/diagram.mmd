@@ -1,0 +1,34 @@
+flowchart LR
+    Contractor[Contractor tablet] --> Web[React/Vite web app]
+    Homeowner[Homeowner display] --> Web
+
+    Web -->|REST / NDJSON| Express[Express server]
+
+    subgraph Backend[TypeScript backend]
+        Express --> Routers[Application and copilot routers]
+        Routers --> Commands[Application commands]
+        Routers --> Turn[Copilot turn orchestration]
+        Routers --> Extract[Document extraction routes]
+        Routers --> Review[Reviewer routes]
+
+        Turn --> Guardrails[Guardrail checks]
+        Guardrails --> LLM[Anthropic LLM adapter]
+        Turn --> Tools[Copilot tools]
+        Tools --> Calculator[Deterministic payment calculator]
+        Tools --> Catalog[Loan product catalog]
+
+        Extract --> OCR[OCR and document adapters]
+        Extract --> ExtractionModel[Extraction model]
+        ExtractionModel --> Provenance[Quote and geometry verification]
+
+        Review --> ReviewerStore[Review and discrepancy logic]
+        Commands --> Store[Application store]
+        Calculator --> Store
+        Provenance --> Store
+        ReviewerStore --> Store
+    end
+
+    Store --> JSONL[(Audit JSONL)]
+    Store --> Files[(Uploads and extracted fixtures)]
+    LLM --> Anthropic[(Anthropic API)]
+    OCR --> PDF[(PDF / Tesseract / Textract)]

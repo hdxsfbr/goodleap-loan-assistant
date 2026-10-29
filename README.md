@@ -343,6 +343,7 @@ docs/
   test-results.md             Dated local runs: the suite, the evals, the verify script, a fresh clone
   ai-usage.md                 How AI was used to build this, what the author decided, what the models got wrong
   build-log.md                What each build wave built, every review finding and every decision
+  audit/                      Pre-change audit at commit 35eb9af: system brief, ranked findings, and the evidence each one cites
   designs/
     loan-assistant-concept.md                     Concept brief (RFC): the two features, decisions, scope, alternatives
     loan-assistant-concept-goldfish-findings.md   Review findings the brief responds to

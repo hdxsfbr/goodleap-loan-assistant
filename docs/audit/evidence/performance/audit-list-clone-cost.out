@@ -1,0 +1,8 @@
+127 events, 509530 bytes; largest types: [
+  [ 'model.call', 279301 ],
+  [ 'tool.call', 82748 ],
+  [ 'view.rendered', 32448 ]
+]
+127 events: 1.3 ms per audit.list()
+1270 events: 12.2 ms per audit.list()
+5080 events: 45.0 ms per audit.list()
