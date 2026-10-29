@@ -240,6 +240,11 @@ function ExchangeView({
           />
         </div>
       ) : null}
+      {exchange.turn.explanation?.question ? (
+        <div className="bubble assistant question">
+          <p className="reply-text">{exchange.turn.explanation.question}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

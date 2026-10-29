@@ -29,7 +29,7 @@ export const PROJECT_TYPES = [
   "other",
 ] as const;
 
-export const TERM_MONTH_OPTIONS = ["60", "120", "180", "240"] as const;
+export const TERM_MONTH_OPTIONS = ["60", "120", "180", "240", "300"] as const;
 
 export const EMPLOYMENT_STATUSES = ["employed", "self_employed", "retired", "other"] as const;
 

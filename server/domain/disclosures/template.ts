@@ -6,7 +6,8 @@
 // The template does no arithmetic. It receives the calculator's integer cents, basis points and
 // month counts, prints them through shared/format.ts (the only money and APR formatters) and
 // fills the fixed sentences. The month count that follows a promotional period comes from the
-// calculator (monthsAfterPromo), not from a subtraction here.
+// calculator (monthsAfterPromo), not from a subtraction here, and the APR cell is the calculator's
+// APR of the payment schedule shown (schedule_apr_bps), not the product's standard rate.
 
 import { formatApr, formatMoney } from "@shared/format";
 import type { DisclosureBlock, OptionDisplay, PaymentOption } from "@shared/schemas";
@@ -142,10 +143,15 @@ function paymentText(option: PaymentOption): string {
   }
 }
 
+/** The APR of the schedule the option discloses, which is what the APR cell prints. */
+function scheduleApr(option: PaymentOption): string {
+  return formatApr(required(option.schedule_apr_bps, option, "schedule_apr_bps"));
+}
+
 /**
  * The options table cells for a set of options, one entry per option in the calculator's order:
- * the payment wording, the term and the APR as the person reads them. Every figure printed is one
- * of the option's `calculatorValues`.
+ * the payment wording, the term and the schedule's APR as the person reads them. Every figure
+ * printed is one of the option's `calculatorValues`.
  */
 export function renderOptionsDisplay(options: readonly PaymentOption[]): OptionDisplay[] {
   return options.map((option) => ({
@@ -156,21 +162,21 @@ export function renderOptionsDisplay(options: readonly PaymentOption[]): OptionD
       option.term_months === 1
         ? OPTION_DISPLAY.term_one
         : fill(OPTION_DISPLAY.term, { count: String(option.term_months) }),
-    apr_text: formatApr(option.apr_bps),
+    apr_text: scheduleApr(option),
   }));
 }
 
 /**
- * The disclosure block for a set of options: per option the four TILA cells (APR, finance
- * charge, amount financed, total of payments) and the schedule line, the consequence line for a
- * deferred-interest option, then the estimate statement and the RESPA line.
+ * The disclosure block for a set of options: per option the four TILA cells (the APR of the
+ * schedule shown, finance charge, amount financed, total of payments) and the schedule line, the
+ * consequence line for a deferred-interest option, then the estimate statement and the RESPA line.
  */
 export function renderDisclosureBlock(options: readonly PaymentOption[]): DisclosureBlock {
   return {
     options: options.map((option) => ({
       label: option.label,
       product_id: option.product_id,
-      apr: formatApr(option.apr_bps),
+      apr: scheduleApr(option),
       finance_charge: formatMoney(option.finance_charge_cents),
       amount_financed: formatMoney(option.amount_financed_cents),
       total_of_payments: formatMoney(option.total_of_payments_cents),

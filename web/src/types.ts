@@ -4,6 +4,7 @@ import type { DisclosureBlock, ErrorBody, StreamLine } from "@shared/schemas";
 
 export type OptionsLine = Extract<StreamLine, { type: "options" }>;
 export type ProposalsLine = Extract<StreamLine, { type: "proposals" }>;
+export type ExplanationLine = Extract<StreamLine, { type: "explanation" }>;
 
 /** One option's pre-formatted disclosure cells. */
 export type DisclosureOption = DisclosureBlock["options"][number];
@@ -19,7 +20,8 @@ export interface TurnState {
   options: OptionsLine | null;
   /** Ids of the proposals the turn made, and the note that explains a failed suggestion. */
   proposals: { ids: string[]; note: string | null } | null;
-  explanation: { text: string; footer: string | null } | null;
+  /** The body, and the question for the contractor that follows it as a bubble of its own. */
+  explanation: { text: string; question: string | null; footer: string | null } | null;
   fallback: { text: string; marker: string; audit_event_id: string } | null;
   error: ErrorBody | null;
   event_ids: string[];

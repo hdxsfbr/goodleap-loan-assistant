@@ -7,7 +7,7 @@ import type {
   ProposedValue,
   VersionsBlock,
 } from "@shared/schemas";
-import type { OptionsLine } from "../../web/src/types";
+import type { ExplanationLine, OptionsLine } from "../../web/src/types";
 
 // Fixtures the web client tests share: three payment options with their disclosure block, the
 // `options` stream line and homeowner props built from them, and small builders for proposals and
@@ -84,7 +84,7 @@ export function disclosureEntry(source: PaymentOption, apr: string): DisclosureB
 
 /** One entry per option: three products, three disclosure entries. */
 export const BLOCK: DisclosureBlock = {
-  options: [disclosureEntry(FIXED, "9.99%"), disclosureEntry(ZERO_INTRO, "12.99%"), disclosureEntry(DEFERRED, "17.99%")],
+  options: [disclosureEntry(FIXED, "9.99%"), disclosureEntry(ZERO_INTRO, "8.96%"), disclosureEntry(DEFERRED, "0.00%")],
   estimate_statement: "This is a payment estimate, not an offer of credit; final terms depend on credit approval.",
   respa_line: "If this loan is secured by your home, a settlement cost statement will be provided.",
 };
@@ -111,6 +111,21 @@ export const OPTIONS_LINE: OptionsLine = {
   options_display: OPTIONS_DISPLAY,
   disclosure_block: BLOCK,
   footer: FOOTER,
+};
+
+/** An explanation line with no question for the contractor. */
+export const EXPLANATION_LINE: ExplanationLine = {
+  type: "explanation",
+  text: "Option A costs less per month and more over the life of the loan.",
+  question: null,
+  footer: FOOTER,
+  event_ids: [],
+};
+
+/** The same line when the reply ended with a question for the contractor. */
+export const EXPLANATION_WITH_QUESTION: ExplanationLine = {
+  ...EXPLANATION_LINE,
+  question: "Use $40,000 as the requested amount?",
 };
 
 export const MECHANIC_SENTENCES: HomeownerViewProps["mechanic_sentences"] = {

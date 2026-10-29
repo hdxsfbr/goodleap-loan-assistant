@@ -232,12 +232,14 @@ by `storeOptions`.
 #### `options.explained`
 
 The explanation that passed all three checks was attached to a stored calculation. Emitted by
-`attachExplanation`.
+`attachExplanation`. `text` is the homeowner-safe body; `question` is the contractor-only line the
+server split off the reply (the marker `Question for you:`), or null.
 
 | Field | Type | Required | PII |
 | --- | --- | --- | --- |
 | `options_id` | string | yes | - |
 | `text` | string | yes | `free_text` |
+| `question` | string or null | yes | `free_text` |
 
 #### `view.rendered`
 

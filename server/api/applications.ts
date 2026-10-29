@@ -107,7 +107,8 @@ function stableStringify(value: unknown): string {
  * The homeowner view for a stored Options record, as a pure function of the record: its
  * calculator output, the disclosure block rendered by the template, its explanation (the canned
  * sentences when the turn had none or the record came from the no-model button), the mechanic
- * sentence per product, and the template version.
+ * sentence per product, and the template version. The stored explanation is the body only: the
+ * question a draft put to the contractor is split off before it is stored, so it cannot get here.
  */
 function homeownerViewFor(record: OptionsRecord): HomeownerViewProps {
   const result = record.calculator_output;

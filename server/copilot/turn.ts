@@ -47,6 +47,29 @@ const SCHEMA_INVALID_NOTE = new AppError("llm.schema_invalid").message;
 /** What the model is told when a draft had no text, in place of the audit rationale `empty_draft`. */
 const EMPTY_DRAFT_INSTRUCTION = "The reply was empty.";
 
+/** What the prompt tells the model to start the one question for the contractor with, on the final line. */
+export const QUESTION_MARKER = "Question for you:";
+
+/**
+ * Splits the contractor's question off a judged draft. The question is the final line when that line
+ * starts with the marker and the marker appears nowhere else in the draft; the body is everything
+ * before it. A marker anywhere else (in the middle of the draft, twice, or not at the start of the
+ * final line) means the draft has no question, and the text is returned as it is. A final line that
+ * is the bare marker, after other text, is dropped and yields no question.
+ */
+export function splitQuestion(draft: string): { body: string; question: string | null } {
+  const text = draft.trim();
+  const lineStart = text.lastIndexOf("\n") + 1;
+  const last = text.slice(lineStart).trim();
+  const before = text.slice(0, lineStart);
+  if (!last.startsWith(QUESTION_MARKER)) return { body: draft, question: null };
+  const question = last.slice(QUESTION_MARKER.length).trim();
+  if (before.includes(QUESTION_MARKER) || question.includes(QUESTION_MARKER)) return { body: draft, question: null };
+  const body = before.trim();
+  if (body === "" && question === "") return { body: draft, question: null };
+  return { body, question: question === "" ? null : question };
+}
+
 /** All text blocks of a response, joined. Interim text in a tool round never reaches this. */
 function textOf(message: Anthropic.Message): string {
   return message.content
@@ -208,12 +231,22 @@ export async function runTurn(base: Ctx, text: string, write: Write): Promise<vo
       if (!result.pass) return fallback(result.blocking_event_id ?? second.event_id);
     }
 
-    // Passed: the text is the explanation.
+    // Passed, question included: the body is the explanation, stored and shown to the homeowner too;
+    // the question is for the contractor alone. A draft that is only a question has no explanation to
+    // store: it is the reply the contractor reads, and the homeowner view keeps its canned sentences.
+    const split = splitQuestion(draft);
+    const reply =
+      split.body === "" && split.question !== null
+        ? { text: split.question, question: null, explains: false }
+        : { text: split.body, question: split.question, explains: true };
     const shown = appendMessage(at(draftCall.event_id, modelActor), draft);
-    if (lastOptions) attachExplanation(at(shown.event_id, copilotActor), lastOptions.options_id, draft);
+    if (lastOptions && reply.explains) {
+      attachExplanation(at(shown.event_id, copilotActor), lastOptions.options_id, reply.text, reply.question);
+    }
     emit({
       type: "explanation",
-      text: draft,
+      text: reply.text,
+      question: reply.question,
       footer: lastOptions ? CHAT_FOOTER : null,
       event_ids: turnEventIds(),
     });
@@ -259,9 +292,12 @@ export async function runTurn(base: Ctx, text: string, write: Write): Promise<vo
             emit(priced.line);
             results.push(ok(optionsToolResult(priced)));
           } catch (err) {
-            // A bad amount or term goes back to the model to ask about; a catalog fault ends the turn.
-            if (err instanceof CommandError) results.push(failed(err.message));
-            else throw err;
+            // A bad amount or term goes back to the model to ask about, and its message is the contractor's
+            // note; a catalog fault ends the turn.
+            if (err instanceof CommandError) {
+              note = err.message;
+              results.push(failed(err.message));
+            } else throw err;
           }
         } else if (block.name === PROPOSE_FIELD_FILL) {
           const outcome = proposeFromTool(block.input, toolParent);

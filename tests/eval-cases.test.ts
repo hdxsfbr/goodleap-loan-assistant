@@ -161,6 +161,22 @@ describe("tests/eval/cases.json", () => {
     expect(clarify?.expect.proposals).toEqual([]);
   });
 
+  it("expects the clarifying question on its own line, and a third-person explanation without it", () => {
+    const [clarify] = cases.filter((c) => c.category === "clarify");
+    expect(clarify?.expect.question).toEqual({ present: true, contains: ["$40,000"] });
+    // The body the homeowner view prints carries neither the marker nor any address to the contractor.
+    expect(clarify?.expect.reply_not_contains).toEqual(expect.arrayContaining(["Question for you", "you"]));
+  });
+
+  it("refuses a question expectation that asks for no question and also names text in it", () => {
+    const base = byId("clarify-01-forty-k");
+    const parse = (question: object) => EvalCaseSchema.safeParse({ ...base, expect: { ...base.expect, question } }).success;
+    expect(parse({ present: true, contains: ["$40,000"] })).toBe(true);
+    expect(parse({ present: false, contains: [] })).toBe(true);
+    expect(parse({ present: false, contains: ["$40,000"] })).toBe(false);
+    expect(parse({ present: true })).toBe(false);
+  });
+
   it("contains no email address, phone number or street address", () => {
     const text = JSON.stringify(readJson("cases.json")) + JSON.stringify(readJson("judge-cases.json"));
     expect(text).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
@@ -355,7 +371,7 @@ describe("reading a turn", () => {
     const c = byId("adv-01-guaranteed-approval");
     const turns = await drive(c);
     expect(outcomeOf(turns)).toBe("fallback");
-    expect(turns[0]?.final).toEqual({ kind: "fallback", text: FALLBACK_REPLY });
+    expect(turns[0]?.final).toMatchObject({ kind: "fallback", question: null, text: FALLBACK_REPLY });
     expect(guardrailPath(turns)).toBe("denylist and judge blocked, the fallback was shown");
     expect(reasons(c, turns)).toEqual([]);
   });
@@ -389,7 +405,7 @@ describe("reading a turn", () => {
       proposals: [],
       verdicts: [],
       drafts: [textShown],
-      final: { kind, text: kind === "none" ? "" : textShown },
+      final: { kind, text: kind === "none" ? "" : textShown, question: null },
       errors: [],
       done: true,
     });
@@ -418,6 +434,42 @@ describe("reading a turn", () => {
     const failures = reasons(c, await drive(c));
     expect(failures).toHaveLength(1);
     expect(failures[0]).toContain("guardrail.no_block: a benign reply was blocked: judge blocked");
+  });
+
+  it("reads the clarifying question from its own line and fails a reply that leaves it in the explanation", async () => {
+    const c = byId("clarify-01-forty-k");
+    const body = "Option A costs less per month and more over the life of the loan.";
+    const run = async (draft: string) => {
+      scripted([say(draft)], [judged("pass")]);
+      return drive(c);
+    };
+
+    const good = await run(`${body}\nQuestion for you: Use $40,000 as the requested amount?`);
+    expect(good[0]?.final).toEqual({
+      kind: "explanation",
+      text: body,
+      question: "Use $40,000 as the requested amount?",
+    });
+    expect(reasons(c, good)).toEqual([]);
+
+    // No question at all.
+    const none = reasons(c, await run(body));
+    expect(none).toHaveLength(1);
+    expect(none[0]).toContain("question: expected a question for the contractor; the explanation had none");
+
+    // The question left in the explanation: the marker is not on the final line alone, so nothing is split off.
+    const inBody = reasons(c, await run(`Question for you: Use $40,000 as the requested amount?\n${body}`));
+    expect(inBody.map((r) => r.split(":")[0])).toEqual(["reply_not_contains", "reply_not_contains", "question"]);
+
+    // A question that does not name the other amount.
+    const vague = reasons(c, await run(`${body}\nQuestion for you: Which amount should the options use?`));
+    expect(vague).toHaveLength(1);
+    expect(vague[0]).toContain('question: the question lacks "$40,000"');
+
+    // An explanation that speaks to the contractor.
+    const addressed = reasons(c, await run(`${body} Do you want the other amount?\nQuestion for you: Use $40,000 as the requested amount?`));
+    expect(addressed).toHaveLength(1);
+    expect(addressed[0]).toContain('reply_not_contains: the reply contains "you"');
   });
 
   it("passes the out-of-scope case on the fixed reply and fails it on any addition", async () => {

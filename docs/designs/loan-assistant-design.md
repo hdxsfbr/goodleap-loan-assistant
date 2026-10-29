@@ -498,7 +498,7 @@ types:
   field.rejected     { proposal_id, field_key, reason_code, review_task_id?, elapsed_ms?, note? }
   application.submitted { fields (the snapshot submitted), document_ids }
   options.stored     { options_id, inputs_source, product_ids }
-  options.explained  { options_id, text }
+  options.explained  { options_id, text, question: string | null (the contractor-only line split off the reply) }
   review.started     { task_id }
   view.rendered      { surface: "homeowner_view", options_id, props (complete), content_sha256, produced_by: [event_id] }
   document.attached  { document_id, slot, adapter }            (emitted by the attachDocument command only)
@@ -1604,7 +1604,7 @@ template (item 32) and is the single source for prompts, tests and the submissio
     *   The turn stream line union: `status { step: string }`, `options { options_id,
         calculator_result, inputs_echo: string, inputs_source, argument_label: string | null,
         disclosure_block, footer: string }`, `proposals { proposals: ProposedValue[], note:
-        string | null }`, `explanation { text, footer: string | null, event_ids: string[] }`,
+        string | null }`, `explanation { text, question: string | null, footer: string | null, event_ids: string[] }`,
         `fallback { text, marker, audit_event_id }`, `error { code, message, retryable }`,
         `done { event_ids: string[] }`.
     *   Route bodies and responses: `TurnRequest { text }`, `FieldEditRequest { value }`,
@@ -1941,6 +1941,13 @@ template (item 32) and is the single source for prompts, tests and the submissio
 
 ##### 28. `server/copilot/turn.ts` (Create)
 
+*   **Build note (2026-10-28)**: a question for the contractor never enters the explanation. The
+    prompt puts it on the reply's final line after the marker `Question for you:`; after the
+    guardrail judges the whole draft, the server splits that line into `explanation.question`,
+    attaches only the body to the Options record (so the homeowner view never shows it), and the
+    panel renders the question as its own bubble. A marker anywhere else leaves the draft intact
+    with no question. Found by the requirements audit (the "$40K" clarifying case).
+
 *   **Layer / kind**: The copilot turn.
 *   **Proposed Changes**: `runTurn(ctx, text, write)` implements Technical Plan 4.1:
     *   `appendMessage`; write `status` lines with the `STATUS_STEPS` strings as each step starts.
@@ -2004,6 +2011,12 @@ template (item 32) and is the single source for prompts, tests and the submissio
 
 ##### 31. `server/domain/payments/calculator.ts` (Create)
 
+*   **Build note (2026-10-28)**: `calculate` enforces the product range of the brief, $5,000 to
+    $100,000 and 5 to 25 years (the form offers 60 to 300 months), with user-facing messages the
+    copilot shows as the note on a proposals line; `levelPaymentCents` and the schedule helpers
+    stay unbounded for unit tests. The option also carries `schedule_apr_bps`, the actuarial APR
+    of the disclosed schedule, beside the contract rate; both are in `calculator_values`.
+
 *   **Layer / kind**: Deterministic money.
 *   **Proposed Changes**: `calculate({ amount_cents, term_months, products })` validates the
     catalog `schema_version` (throws `catalog.schema_mismatch`) and returns per product a
@@ -2040,9 +2053,12 @@ template (item 32) and is the single source for prompts, tests and the submissio
     of interest is added and the payment becomes {payment} for the remaining {months} months."
     `renderChatFooter()` returns `CHAT_FOOTER`. The template's version is its file hash. Uses only
     `shared/format.ts`; no arithmetic (the month count after a promotion comes from the
-    calculator's `monthsAfterPromo`). Two rendering decisions: the APR cell of a promotional
-    product shows the standard APR (12.99%, 17.99%), with the promotional rate in the schedule
-    line, since no blended APR is defined; and a `deferred_interest` option uses the single-form
+    calculator's `monthsAfterPromo`). Two rendering decisions: the APR cell shows the actuarial
+    APR of the schedule the option discloses (Regulation Z Appendix J, monthly periods: 9.99% for
+    the fixed loan, about 8.96% for the 0% introductory loan, 0.00% for the deferred loan paid in
+    full), computed by the calculator from that schedule; the first build showed the standard
+    rate (12.99%, 17.99%) in the cell, which contradicted a $0.00 finance charge and was
+    corrected after the requirements audit on 2026-10-28; and a `deferred_interest` option uses the single-form
     schedule line ("12 monthly payments of $2,500.00", the paid-in-full plan) followed by the
     consequence line, because item 31 defines no promotional payment for it.
 *   **Tested by**: item 76.

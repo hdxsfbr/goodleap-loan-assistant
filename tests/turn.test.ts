@@ -13,7 +13,7 @@ import { createApiRouter } from "../server/api/index.js";
 import { audit, createAuditLog, createMemorySink, installAuditLog, type Ctx } from "../server/audit-log.js";
 import { setFieldValue } from "../server/commands.js";
 import { splitWindow, TURN_WINDOW } from "../server/copilot/context.js";
-import { runTurn } from "../server/copilot/turn.js";
+import { runTurn, splitQuestion } from "../server/copilot/turn.js";
 import { AppError } from "../server/errors.js";
 import {
   CANNED_SENTENCE,
@@ -230,14 +230,14 @@ describe("a payment turn", () => {
         product_id: "zero_intro_18m",
         payment_text: "$250.00 a month for the first 18 months, then $414.14 a month",
         term_text: "120 months",
-        apr_text: "12.99%",
+        apr_text: "8.96%",
       },
       {
         label: "Option C",
         product_id: "deferred_12m",
         payment_text: "$2,500.00 a month for 12 months",
         term_text: "120 months",
-        apr_text: "17.99%",
+        apr_text: "0.00%",
       },
     ]);
     expect(options.options_display.map((entry) => entry.label)).toEqual(
@@ -302,7 +302,7 @@ describe("a payment turn", () => {
           [toolUse("t1", "calculate_payment", { amount_cents: 4_000_000, term_months: null, product_ids: ["fixed_10y"] })],
           "tool_use",
         ),
-        say("These options use $30,000.00. Use $40,000 as the requested amount?"),
+        say("These options use $30,000.00, the amount on the application.\nQuestion for you: Use $40,000 as the requested amount?"),
       ],
       [judged("pass")],
     );
@@ -315,6 +315,134 @@ describe("a payment turn", () => {
     const result = JSON.parse(created[1].messages.at(-1).content[0].content);
     expect(result.notes[0]).toContain("$40,000.00");
     expect(types(lines)).toContain("explanation");
+    const shown = lines.find((l) => l.type === "explanation");
+    expect(shown?.type === "explanation" && shown.text).toBe("These options use $30,000.00, the amount on the application.");
+    expect(shown?.type === "explanation" && shown.question).toBe("Use $40,000 as the requested amount?");
+  });
+});
+
+describe("a question for the contractor", () => {
+  const BODY = "Option A costs less per month and more over the life of the loan.";
+  const QUESTION = "Use $40,000 as the requested amount?";
+  const explanationOf = (lines: StreamLine[]) => {
+    const line = lines.find((l) => l.type === "explanation");
+    if (line?.type !== "explanation") throw new Error("no explanation line");
+    return line;
+  };
+
+  it("splits a final Question for you line off the body after the whole draft passed", async () => {
+    setFieldValue(ctx, "requested_loan_amount", 3_000_000);
+    const { parsed } = scripted(
+      [message([CALC_ALL], "tool_use"), say(`${BODY}\nQuestion for you: ${QUESTION}`)],
+      [judged("pass")],
+    );
+    const lines = await turn("If she adds the solar panels it could come to $40K. What would the payment be then?");
+
+    // The judge read the question with the rest of the draft.
+    expect(JSON.stringify(parsed[0])).toContain(`Question for you: ${QUESTION}`);
+
+    const shown = explanationOf(lines);
+    expect(shown.text).toBe(BODY);
+    expect(shown.question).toBe(QUESTION);
+    expect(shown.footer).toBe(CHAT_FOOTER);
+    expect(StreamLineSchema.safeParse(shown).success).toBe(true);
+
+    // The record, and so the homeowner view, holds the body only; the audit keeps the question.
+    const options = lines.find((l) => l.type === "options");
+    if (options?.type !== "options") throw new Error("no options line");
+    expect(store.getOptions(options.options_id)?.explanation).toBe(BODY);
+    expect(ofType("options.explained")).toMatchObject([{ options_id: options.options_id, text: BODY, question: QUESTION }]);
+    // The chat transcript keeps what the model wrote.
+    expect(store.listMessages(APP).at(-1)?.text).toBe(`${BODY}\nQuestion for you: ${QUESTION}`);
+  });
+
+  it("records a null question when the draft has none", async () => {
+    setFieldValue(ctx, "requested_loan_amount", 3_000_000);
+    scripted([message([CALC_ALL], "tool_use"), say(BODY)], [judged("pass")]);
+    const lines = await turn("Payments for $30K?");
+    const shown = explanationOf(lines);
+    expect(shown.text).toBe(BODY);
+    expect(shown.question).toBeNull();
+    expect(ofType("options.explained")[0]?.question).toBeNull();
+  });
+
+  it("treats a draft whose marker is not alone on the final line as having no question", async () => {
+    const drafts = [
+      `Question for you: ${QUESTION}\n${BODY}`, // the marker is not on the final line
+      `${BODY} Question for you: ${QUESTION}`, // the final line does not start with the marker
+      `Question for you: Which amount?\n${BODY}\nQuestion for you: ${QUESTION}`, // the marker appears twice
+      `${BODY}\nQuestion for you: Which amount? Question for you: ${QUESTION}`, // twice on the final line
+      `${BODY}\nQuestion for you:\n${QUESTION}`, // the question is on the line after the marker
+    ];
+    for (const draft of drafts) {
+      store.reset();
+      store.loadSeed();
+      installAuditLog(createAuditLog(createMemorySink()));
+      scripted([say(draft)], [judged("pass")]);
+      const shown = explanationOf(await turn("Explain the options. It could come to $40K."));
+      expect(shown.text, draft).toBe(draft);
+      expect(shown.question, draft).toBeNull();
+    }
+  });
+
+  it("splits a question only draft into a reply with no explanation to store", async () => {
+    setFieldValue(ctx, "requested_loan_amount", 3_000_000);
+    scripted([message([CALC_ALL], "tool_use"), say(`Question for you: ${QUESTION}`)], [judged("pass")]);
+    const lines = await turn("Payments for $30K? It could come to $40K.");
+    const shown = explanationOf(lines);
+    expect(shown.text).toBe(QUESTION);
+    expect(shown.question).toBeNull();
+    const options = lines.find((l) => l.type === "options");
+    if (options?.type !== "options") throw new Error("no options line");
+    // Nothing for the homeowner view: it keeps its canned sentences.
+    expect(store.getOptions(options.options_id)?.explanation).toBeUndefined();
+    expect(ofType("options.explained")).toEqual([]);
+  });
+
+  it("drops a bare marker after the body and keeps the body", async () => {
+    scripted([say(`${BODY}\nQuestion for you:`)], [judged("pass")]);
+    const shown = explanationOf(await turn("Explain the options."));
+    expect(shown.text).toBe(BODY);
+    expect(shown.question).toBeNull();
+  });
+
+  it("blocks the whole draft when the question breaks a rule, and shows the regenerated reply", async () => {
+    scripted(
+      [
+        say(`${BODY}\nQuestion for you: Should she be told she is pre-approved?`),
+        say(`${BODY}\nQuestion for you: ${QUESTION}`),
+      ],
+      [judged("pass"), judged("pass")],
+    );
+    const lines = await turn("If she adds the solar panels it could come to $40K.");
+    expect(ofType("guardrail.verdict").filter((v) => v.outcome === "blocked").map((v) => v.layer)).toContain("denylist");
+    const shown = explanationOf(lines);
+    expect(shown.text).toBe(BODY);
+    expect(shown.question).toBe(QUESTION);
+    expect(JSON.stringify(lines)).not.toContain("pre-approved");
+  });
+});
+
+describe("splitQuestion", () => {
+  it("returns the body and the question without the marker", () => {
+    expect(splitQuestion("Option A is fixed.\n\nQuestion for you: Which amount?\n")).toEqual({
+      body: "Option A is fixed.",
+      question: "Which amount?",
+    });
+    expect(splitQuestion("Question for you: Which amount?")).toEqual({ body: "", question: "Which amount?" });
+  });
+
+  it("leaves a draft without a splittable marker as it is", () => {
+    for (const draft of ["Option A is fixed.", "Question for you:", "Question for you: a\nOption A.", "Option A. Question for you: a"]) {
+      expect(splitQuestion(draft)).toEqual({ body: draft, question: null });
+    }
+  });
+
+  it("matches the marker exactly", () => {
+    expect(splitQuestion("Option A.\nquestion for you: Which amount?")).toEqual({
+      body: "Option A.\nquestion for you: Which amount?",
+      question: null,
+    });
   });
 });
 
@@ -674,6 +802,30 @@ describe("invalid tool arguments", () => {
   });
 });
 
+describe("an amount or term the calculator refuses", () => {
+  const cases = [
+    { name: "amount", args: { amount_cents: 20_000_000_000, term_months: null, product_ids: ["fixed_10y"] } },
+    { name: "term", args: { amount_cents: 3_000_000, term_months: 5_000, product_ids: ["fixed_10y"] } },
+  ];
+  for (const { name, args } of cases) {
+    it(`writes the calculator's own message as the note for an out-of-range ${name}`, async () => {
+      const { created } = scripted(
+        [message([toolUse("t1", "calculate_payment", args)], "tool_use"), say("The options need an amount and term in range.")],
+        [judged("pass")],
+      );
+      const lines = await turn("What would the payment be on that?");
+      expect(types(lines)).toEqual(["status", "status", "proposals", "status", "status", "explanation", "done"]);
+      const result = created[1].messages.at(-1).content[0];
+      expect(result.is_error).toBe(true);
+      const proposals = lines.find((l) => l.type === "proposals");
+      expect(proposals).toEqual({ type: "proposals", proposals: [], note: result.content });
+      expect(result.content).not.toBe(new AppError("llm.schema_invalid").message);
+      expect(proposals?.type === "proposals" && proposals.note).not.toMatch(/field suggestions/);
+      expect(types(lines)).not.toContain("options");
+    });
+  }
+});
+
 describe("model failures", () => {
   it("treats a refusal as a block", async () => {
     scripted([message([], "refusal")]);
@@ -916,6 +1068,30 @@ describe("routes", () => {
         .map((e) => e.event_id);
       expect(rendered?.produced_by).toEqual(turnEvents);
       expect(done?.type === "done" && done.event_ids).toEqual(turnEvents);
+    });
+  });
+
+  it("keeps the contractor's question off the homeowner view", async () => {
+    setFieldValue(ctx, "requested_loan_amount", 3_000_000);
+    const body = "Option A costs less per month and more over the life of the loan.";
+    scripted(
+      [message([CALC_ALL], "tool_use"), say(`${body}\nQuestion for you: Use $40,000 as the requested amount?`)],
+      [judged("pass")],
+    );
+    await serve(async (base) => {
+      const lines = ndjson(
+        await (await post(base, `/api/applications/${APP}/copilot/turns`, { text: "If she adds solar it could be $40K." })).text(),
+      );
+      const options = lines.find((l) => l.type === "options");
+      const shown = lines.find((l) => l.type === "explanation");
+      if (options?.type !== "options" || shown?.type !== "explanation") throw new Error("missing lines");
+      expect(shown.question).toBe("Use $40,000 as the requested amount?");
+      const res = await post(base, `/api/applications/${APP}/homeowner-view`, { options_id: options.options_id });
+      const props = HomeownerViewPropsSchema.parse(await res.json());
+      expect(props.explanation).toBe(body);
+      const printed = JSON.stringify(props) + JSON.stringify(ofType("view.rendered"));
+      expect(printed).not.toContain("Question for you");
+      expect(printed).not.toContain("Use $40,000");
     });
   });
 

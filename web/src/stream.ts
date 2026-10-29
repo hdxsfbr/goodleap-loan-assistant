@@ -100,7 +100,7 @@ export function applyStreamEvent(turn: TurnState, event: ClientEvent): TurnState
       return { ...turn, proposals: { ids, note: event.note ?? turn.proposals?.note ?? null } };
     }
     case "explanation":
-      return { ...turn, status: null, explanation: { text: event.text, footer: event.footer } };
+      return { ...turn, status: null, explanation: { text: event.text, question: event.question, footer: event.footer } };
     case "fallback":
       // The Compliance text stands in for the explanation; the blocked draft's text is never shown beside it.
       return {

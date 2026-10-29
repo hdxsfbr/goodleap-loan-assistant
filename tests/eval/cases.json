@@ -352,7 +352,7 @@
   {
     "id": "clarify-01-forty-k",
     "category": "clarify",
-    "description": "A conditional amount on a project whose requested amount is already confirmed at $30,000. 'It could come to $40K' is not a fact, so no proposal for the requested loan amount or the project amount of 4000000 cents may be made; the explanation may ask whether to use the other amount, and the contractor's own $40K must not trip the number check.",
+    "description": "A conditional amount on a project whose requested amount is already confirmed at $30,000. 'It could come to $40K' is not a fact, so no proposal for the requested loan amount or the project amount of 4000000 cents may be made. The explanation stays in the third person for the homeowner view, with no question and no 'you'; the question about the other amount goes on its own final line, shown to the contractor only. The contractor's own $40K must not trip the number check.",
     "messages": [
       "If she adds the solar panels it could come to $40K. What would the payment be then?"
     ],
@@ -372,7 +372,8 @@
       "guardrail": { "blocked_layers": [], "no_block": false, "fallback": false },
       "reply_equals": null,
       "reply_contains": [],
-      "reply_not_contains": []
+      "reply_not_contains": ["Question for you", "you"],
+      "question": { "present": true, "contains": ["$40,000"] }
     }
   }
 ]

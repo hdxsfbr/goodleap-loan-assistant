@@ -197,7 +197,7 @@ export function optionsToolResult(priced: PricedOptions): string {
       product: option.product_name,
       mechanic: option.mechanic,
       term: years ? `${option.term_months} months (${years})` : `${option.term_months} months`,
-      apr: cells?.apr ?? formatApr(option.apr_bps),
+      apr: cells?.apr ?? formatApr(option.schedule_apr_bps ?? option.apr_bps),
       payments: cells?.schedule_line ?? null,
       ...(option.promo_months === undefined ? {} : { promotional_period: `${option.promo_months} months` }),
       ...(option.promo_apr_bps === undefined ? {} : { promotional_rate: formatApr(option.promo_apr_bps) }),

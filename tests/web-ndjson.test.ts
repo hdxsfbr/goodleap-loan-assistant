@@ -38,7 +38,9 @@ import type { Exchange } from "../web/src/types";
 import {
   BLOCK,
   DEFERRED,
+  EXPLANATION_WITH_QUESTION,
   FIXED,
+  FOOTER,
   OPTIONS_DISPLAY,
   OPTIONS_LINE,
   SHORT_BLOCK,
@@ -84,6 +86,7 @@ describe("parseStreamLine", () => {
     });
     expect(parseStreamLine(line(OPTIONS_LINE)).ok).toBe(true);
     expect(parseStreamLine(line({ type: "done", event_ids: ["e1"] })).ok).toBe(true);
+    expect(parseStreamLine(line(EXPLANATION_WITH_QUESTION))).toEqual({ ok: true, line: EXPLANATION_WITH_QUESTION });
   });
 
   it("rejects text that is not JSON, an unknown type and an undeclared field", () => {
@@ -91,6 +94,10 @@ describe("parseStreamLine", () => {
     expect(parseStreamLine('{"type":"mystery"}').ok).toBe(false);
     expect(parseStreamLine('{"type":"status","step":"x","extra":1}').ok).toBe(false);
     expect(parseStreamLine('{"type":"done"}').ok).toBe(false);
+    // An explanation line always says whether it carries a question.
+    expect(
+      parseStreamLine('{"type":"explanation","text":"Option A is a fixed-rate loan.","footer":null,"event_ids":[]}').ok,
+    ).toBe(false);
   });
 });
 
@@ -101,7 +108,7 @@ describe("applyStreamEvent", () => {
       OPTIONS_LINE,
       { type: "status", step: "Checking wording..." },
       { type: "proposals", proposals: [proposal("p1", "homeowner_first_name", "Maria", "m_1")], note: null },
-      { type: "explanation", text: "Option A costs less per month.", footer: OPTIONS_LINE.footer, event_ids: ["e9"] },
+      { type: "explanation", text: "Option A costs less per month.", question: null, footer: OPTIONS_LINE.footer, event_ids: ["e9"] },
       { type: "done", event_ids: ["e1", "e2"] },
     ];
     let turn = startTurn();
@@ -122,7 +129,18 @@ describe("applyStreamEvent", () => {
     expect(turn.options?.options_id).toBe("opt_1");
     expect(turn.proposals).toEqual({ ids: ["p1"], note: null });
     expect(turn.explanation?.text).toBe("Option A costs less per month.");
+    expect(turn.explanation?.question).toBeNull();
     expect(turn.event_ids).toEqual(["e1", "e2"]);
+  });
+
+  it("keeps the question of an explanation line beside its body and footer", () => {
+    const turn = applyStreamEvent(startTurn(), EXPLANATION_WITH_QUESTION);
+    expect(turn.explanation).toEqual({
+      text: EXPLANATION_WITH_QUESTION.text,
+      question: "Use $40,000 as the requested amount?",
+      footer: FOOTER,
+    });
+    expect(turnHasContent(turn)).toBe(true);
   });
 
   it("accumulates proposals across lines and keeps the note", () => {
@@ -155,6 +173,7 @@ describe("applyStreamEvent", () => {
     turn = applyStreamEvent(turn, {
       type: "explanation",
       text: "A draft the guardrail later blocked.",
+      question: "Use $40,000 as the requested amount?",
       footer: OPTIONS_LINE.footer,
       event_ids: ["e1"],
     });
@@ -166,6 +185,7 @@ describe("applyStreamEvent", () => {
       audit_event_id: "evt_77",
     });
     turn = applyStreamEvent(turn, { type: "done", event_ids: ["e2"] });
+    // The question goes with the draft it was part of.
     expect(turn.explanation).toBeNull();
     expect(turn.fallback?.text).toMatch(/lending rules/);
     // The options table the turn showed stays.
@@ -263,7 +283,7 @@ describe("readTurnBody", () => {
   it("reassembles lines and multi-byte characters split across chunks", async () => {
     const text = [
       line({ type: "status", step: "Finding matching products..." }),
-      line({ type: "explanation", text: "Option A costs less – “quietly”.", footer: null, event_ids: [] }),
+      line({ type: "explanation", text: "Option A costs less – “quietly”.", question: null, footer: null, event_ids: [] }),
       line({ type: "done", event_ids: ["e1"] }),
     ].join("\n"); // no trailing newline on purpose
     const bytes = new TextEncoder().encode(text);
@@ -316,7 +336,7 @@ describe("conversation store", () => {
   const FULL_TURN: ClientEvent[] = [
     OPTIONS_LINE,
     { type: "proposals", proposals: [proposal("p1", "homeowner_first_name", "Maria", "m_1")], note: null },
-    { type: "explanation", text: "Option A costs less per month.", footer: OPTIONS_LINE.footer, event_ids: [] },
+    { type: "explanation", text: "Option A costs less per month.", question: null, footer: OPTIONS_LINE.footer, event_ids: [] },
     { type: "done", event_ids: ["e1"] },
   ];
 
@@ -653,7 +673,7 @@ describe("audit presenters", () => {
     expect(eventBadge(calculatorCall)).toBe("LIVE");
     expect(eventBadge(modelCall)).toBe("LIVE");
     expect(eventBadge({ ...modelCall, _fixture: true } as AuditEvent)).toBe("MOCK");
-    expect(eventBadge(event({ type: "options.explained", options_id: "opt_1", text: "x" }))).toBeNull();
+    expect(eventBadge(event({ type: "options.explained", options_id: "opt_1", text: "x", question: null }))).toBeNull();
   });
 
   it("summarizes events in one line each", () => {

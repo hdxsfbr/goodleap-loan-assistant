@@ -222,6 +222,11 @@ the provider's usage page is the record, and it was not consulted.
 | The eval runner (wave 6): two full runs of the 15 copilot cases and the 20 judge cases, the second after the prompt fixes | 128 calls (52 copilot turns' worth of rounds, 76 judge calls), about 140K input tokens plus 240K cache reads | About $1.50 |
 | Verify-script runs with the browser walk (wave 6): three runs of three live turns | 9 turns | About $0.20 |
 
+The brief says a focused one-to-two-hour submission beats a sprawling one. This submission took one
+working day (2026-10-28): the morning on the design and its five-stage review, the afternoon and
+evening on the six build waves, with AI agents doing the typing throughout. The design is the part the
+author stands behind line by line; the code was read in review and in the walkthroughs, not written by hand.
+
 The estimate for the whole build is under $5 of API spend. It counts only the calls named here. The cost of the
 Claude Code agents, the reviewer agents and codex is not counted.
 

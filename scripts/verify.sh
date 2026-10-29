@@ -30,6 +30,10 @@ say() { printf '%-8s %s\n' "$1" "$2"; }
 npm run build > "$OUT/build.log" 2>&1 && say ok "build (log: $OUT/build.log)" || { say FAIL "build (see $OUT/build.log)"; status=1; }
 npm test > "$OUT/test.log" 2>&1 && say ok "tests: $(grep -E '^ *Tests ' "$OUT/test.log" | tr -s ' ' | sed 's/^ //')" || { say FAIL "tests (see $OUT/test.log)"; status=1; }
 
+if lsof -t -i:"$PORT" > /dev/null 2>&1; then
+  say FAIL "port $PORT is already in use (pid $(lsof -t -i:"$PORT" | head -1)); pass --port or stop that process"
+  exit 1
+fi
 PORT="$PORT" npm start > "$OUT/server.log" 2>&1 < /dev/null &
 server_pid=$!
 up=0
@@ -57,5 +61,8 @@ if [ "$WALK" = 1 ] && [ "$up" = 1 ]; then
   fi
 fi
 
+# npm start runs "vite build && tsx server/index.ts" in a subshell, so kill the listener by port
+# as well as the npm process, or the tsx child outlives this script and blocks the next run.
+lsof -t -i:"$PORT" 2>/dev/null | xargs -r kill 2>/dev/null
 kill "$server_pid" 2>/dev/null; wait "$server_pid" 2>/dev/null
 exit $status

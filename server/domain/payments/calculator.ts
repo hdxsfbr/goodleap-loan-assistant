@@ -7,6 +7,9 @@
 // fraction of BigInts (see levelPaymentCents), rounded half-even to a whole number of cents, so
 // an exact half-cent tie lands on the even cent. No float touches money. Nothing returned from
 // this file is fractional.
+//
+// The one float computation is the APR of a payment schedule (scheduleAprBps): a rate, not money,
+// found by bisection on the monthly rate and returned as whole basis points.
 
 import { formatApr, formatMoney } from "@shared/format";
 import {
@@ -18,7 +21,13 @@ import {
   type ScheduleRow,
 } from "@shared/schemas";
 import { AppError, CommandError } from "../../errors.js";
-import { CATALOG_SCHEMA_VERSION } from "../catalog.js";
+import {
+  CATALOG_SCHEMA_VERSION,
+  MAX_LOAN_AMOUNT_CENTS,
+  MAX_LOAN_TERM_MONTHS,
+  MIN_LOAN_AMOUNT_CENTS,
+  MIN_LOAN_TERM_MONTHS,
+} from "../catalog.js";
 
 /** Option labels by catalog position: a product keeps its label whichever products are priced. */
 const LABELS = [
@@ -27,7 +36,11 @@ const LABELS = [
   "Option C",
 ] as const satisfies readonly PaymentOption["label"][];
 
-/** Upper bounds that keep every intermediate product an exactly representable integer. */
+/**
+ * Upper bounds that keep every intermediate product an exactly representable integer. They bound
+ * the arithmetic (and a catalog's term); the range a loan may be requested in is the narrower
+ * product range from the catalog, enforced by `calculate`.
+ */
 export const MAX_AMOUNT_CENTS = 10_000_000_000;
 export const MAX_TERM_MONTHS = 600;
 
@@ -198,6 +211,68 @@ function assertRepaid(rows: readonly ScheduleRow[], amount_cents: number, produc
 }
 
 // ---------------------------------------------------------------------------------------------
+// The APR of a payment schedule
+// ---------------------------------------------------------------------------------------------
+
+/** Bisection stops when the bracket on the monthly rate is narrower than this. */
+const APR_TOLERANCE = 1e-12;
+
+/** The bracket for the monthly rate: 0 to 200% a month, which holds every schedule the catalog bounds allow. */
+const MONTHLY_RATE_CEILING = 2;
+
+/** The present value, in cents, of payment k received k months after the loan, at a monthly rate. */
+function presentValue(payments: readonly number[], monthlyRate: number): number {
+  let total = 0;
+  payments.forEach((payment, index) => {
+    total += payment / Math.pow(1 + monthlyRate, index + 1);
+  });
+  return total;
+}
+
+/** A non-negative float rounded to a whole number, an exact .5 going to the even neighbour. */
+function roundHalfEvenFloat(value: number): number {
+  const floor = Math.floor(value);
+  const fraction = value - floor;
+  if (fraction < 0.5) return floor;
+  if (fraction > 0.5) return floor + 1;
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
+/**
+ * The annual percentage rate of the payment schedule an option discloses, in basis points, by the
+ * actuarial method with monthly periods (Regulation Z Appendix J): the monthly rate i at which
+ *
+ *   amount financed = sum over k = 1..n of payment_k / (1 + i)^k
+ *
+ * over the schedule's rows, times 12, rounded half-even to two decimals of a percent. This is the
+ * rate the schedule earns, so a schedule with free months comes out below the product's standard
+ * rate, and one with no finance charge comes out at exactly 0.
+ *
+ * The present value falls as the rate rises, so the rate is found by bisection on [0, 2] to a
+ * bracket of 1e-12, which fixes the APR to about a ten-millionth of a basis point.
+ */
+export function scheduleAprBps(amount_financed_cents: number, schedule: readonly ScheduleRow[]): number {
+  if (!Number.isSafeInteger(amount_financed_cents) || amount_financed_cents < 1) {
+    throw new RangeError(`scheduleAprBps expects a positive integer amount financed, got ${amount_financed_cents}`);
+  }
+  if (schedule.length === 0) throw new RangeError("scheduleAprBps expects at least one payment.");
+  const payments = schedule.map((row) => row.payment_cents);
+  // Integer cents: payments that only repay the amount financed earn 0.00%, with no float noise.
+  if (payments.reduce((total, payment) => total + payment, 0) <= amount_financed_cents) return 0;
+  if (presentValue(payments, MONTHLY_RATE_CEILING) > amount_financed_cents) {
+    throw new AppError("internal", "A payment schedule earns more than the APR bracket allows.");
+  }
+  let low = 0;
+  let high = MONTHLY_RATE_CEILING;
+  while (high - low > APR_TOLERANCE) {
+    const middle = (low + high) / 2;
+    if (presentValue(payments, middle) > amount_financed_cents) low = middle;
+    else high = middle;
+  }
+  return roundHalfEvenFloat(((low + high) / 2) * 12 * 10_000);
+}
+
+// ---------------------------------------------------------------------------------------------
 // Catalog and input validation
 // ---------------------------------------------------------------------------------------------
 
@@ -241,19 +316,32 @@ function requirePromoMonths(product: CatalogProduct): number {
   return product.promo_months;
 }
 
+/** The product range: $5,000.00 to $100,000.00. The message is shown to the contractor as written. */
 function validateAmount(amount_cents: number): void {
-  if (!Number.isSafeInteger(amount_cents) || amount_cents < 1 || amount_cents > MAX_AMOUNT_CENTS) {
+  if (
+    !Number.isSafeInteger(amount_cents) ||
+    amount_cents < MIN_LOAN_AMOUNT_CENTS ||
+    amount_cents > MAX_LOAN_AMOUNT_CENTS
+  ) {
     throw new CommandError(
-      `Enter a loan amount between ${formatMoney(1)} and ${formatMoney(MAX_AMOUNT_CENTS)}.`,
+      `Loan amounts are between ${formatMoney(MIN_LOAN_AMOUNT_CENTS)} and ${formatMoney(MAX_LOAN_AMOUNT_CENTS)}.`,
       { status: 400 },
     );
   }
 }
 
+/** The product range: 60 to 300 months, which the message gives as 5 to 25 years. */
 function validateTerm(term_months: number | null): void {
   if (term_months === null) return;
-  if (!Number.isSafeInteger(term_months) || term_months < 1 || term_months > MAX_TERM_MONTHS) {
-    throw new CommandError(`Choose a term between 1 and ${MAX_TERM_MONTHS} months.`, { status: 400 });
+  if (
+    !Number.isSafeInteger(term_months) ||
+    term_months < MIN_LOAN_TERM_MONTHS ||
+    term_months > MAX_LOAN_TERM_MONTHS
+  ) {
+    throw new CommandError(
+      `Terms are between ${MIN_LOAN_TERM_MONTHS / 12} and ${MAX_LOAN_TERM_MONTHS / 12} years.`,
+      { status: 400 },
+    );
   }
 }
 
@@ -295,6 +383,7 @@ function priceFixed(label: Label, product: CatalogProduct, amount: number, term:
     mechanic: product.mechanic,
     term_months: term,
     apr_bps: product.apr_bps,
+    schedule_apr_bps: scheduleAprBps(amount, schedule),
     payment_cents: payment,
     finance_charge_cents: sum(schedule, "interest_cents"),
     amount_financed_cents: amount,
@@ -332,6 +421,7 @@ function priceZeroIntro(label: Label, product: CatalogProduct, amount: number): 
     mechanic: product.mechanic,
     term_months: product.term_months,
     apr_bps: product.apr_bps,
+    schedule_apr_bps: scheduleAprBps(amount, schedule),
     promo_apr_bps: 0,
     payment_cents: payment,
     promo_payment_cents: Math.min(promoPayment, amount),
@@ -414,6 +504,7 @@ function priceDeferred(label: Label, product: CatalogProduct, amount: number): P
     mechanic: product.mechanic,
     term_months: product.term_months,
     apr_bps: product.apr_bps,
+    schedule_apr_bps: scheduleAprBps(amount, schedule),
     promo_apr_bps: 0,
     payment_cents: payment,
     promo_months: promo,
@@ -443,7 +534,11 @@ export interface CalculateInput {
   product_ids?: readonly string[];
 }
 
-/** Prices each requested product: Option A, B and C by catalog position. */
+/**
+ * Prices each requested product: Option A, B and C by catalog position. The amount and a term
+ * override must be inside the product range ($5,000.00 to $100,000.00, 5 to 25 years); outside it
+ * a 400 `CommandError` carries the sentence the contractor reads.
+ */
 export function calculate(input: CalculateInput): CalculatorResult {
   validateCatalog(input.products);
   validateAmount(input.amount_cents);
@@ -484,16 +579,18 @@ function termInYears(term_months: number): string {
 
 /**
  * The figures the number-match check allows prose about this option to contain, each through the
- * shared formatters: payment, promo payment, consequence payment, APR, promo rate, finance
- * charge, amount financed, total of payments, consequence total, interest added, the term in
- * months and in years, and the promotional and post-promotional month counts that the
- * disclosure block itself prints.
+ * shared formatters: payment, promo payment, consequence payment, the contract APR and the APR of
+ * the schedule shown (the figure the disclosure prints), promo rate, finance charge, amount
+ * financed, total of payments, consequence total, interest added, the term in months and in
+ * years, and the promotional and post-promotional month counts that the disclosure block itself
+ * prints.
  */
 export function calculatorValues(option: PaymentOption): string[] {
   const values: string[] = [formatMoney(option.payment_cents)];
   if (option.promo_payment_cents !== undefined) values.push(formatMoney(option.promo_payment_cents));
   if (option.consequence) values.push(formatMoney(option.consequence.payment_cents));
   values.push(formatApr(option.apr_bps));
+  if (option.schedule_apr_bps !== undefined) values.push(formatApr(option.schedule_apr_bps));
   if (option.promo_apr_bps !== undefined) values.push(formatApr(option.promo_apr_bps));
   values.push(
     formatMoney(option.finance_charge_cents),

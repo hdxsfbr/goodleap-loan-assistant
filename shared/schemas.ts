@@ -430,7 +430,14 @@ export const PaymentOptionSchema = obj({
   product_name: z.string(),
   mechanic: MechanicSchema,
   term_months: z.number().int().positive(),
+  /** The contract rate: the product's standard APR, charged on the balance. */
   apr_bps: z.number().int().nonnegative(),
+  /**
+   * The actuarial APR of `schedule` (Regulation Z Appendix J, monthly periods), in basis points.
+   * Set on every option the calculator prices; the TILA cell and the options table print it, and a
+   * schedule that earns less than the contract rate (free months) shows the lower figure.
+   */
+  schedule_apr_bps: z.number().int().nonnegative().optional(),
   /** 0 for the promotional mechanics, absent for `fixed`. */
   promo_apr_bps: z.number().int().nonnegative().optional(),
   payment_cents: z.number().int(),
@@ -492,6 +499,7 @@ export const HomeownerViewPropsSchema = obj({
   options: CalculatorResultSchema,
   options_display: z.array(OptionDisplaySchema),
   disclosure_block: DisclosureBlockSchema,
+  /** The judged explanation's body. The contractor's question is split off before it is stored and never reaches this. */
   explanation: z.string(),
   mechanic_sentences: z.record(ProductIdSchema, z.string()),
   what_happens_next: z.string(),
@@ -758,7 +766,10 @@ export const AuditEventSchema = z.discriminatedUnion("type", [
   AuditBaseSchema.extend({
     type: z.literal("options.explained"),
     options_id: z.string(),
+    /** The explanation body, as the homeowner view prints it. */
     text: pii("free_text", z.string()),
+    /** The question for the contractor that ended the judged draft, without its marker; null when there was none. */
+    question: pii("free_text", z.string().nullable()),
   }),
   AuditBaseSchema.extend({
     type: z.literal("review.started"),
@@ -809,7 +820,10 @@ export const ProposalsLineSchema = obj({
 
 export const ExplanationLineSchema = obj({
   type: z.literal("explanation"),
+  /** The body, for the contractor and the homeowner. */
   text: z.string(),
+  /** A question for the contractor alone, shown as its own bubble after the body; null when there is none. */
+  question: z.string().nullable(),
   footer: z.string().nullable(),
   event_ids: z.array(z.string()),
 });

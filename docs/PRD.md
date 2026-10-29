@@ -191,13 +191,13 @@ with current LLM capabilities. [P][T]
 
 Five dimensions, weighted equally. [T]
 
-| Dimension | Question | Strong signal |
+| Dimension | What is being judged | What a strong answer shows |
 | --- | --- | --- |
-| Stakeholder Empathy | Can you identify the real problem and the right user to solve for? | Addresses the contractor workflow, not just technology. Understands the homeowner's emotional state during a financing decision. |
-| Technical Depth | Can you design a real system, not just describe concepts? | Specific model choices with reasoning. Addresses latency, cost and context window limits. Aware of failure modes. |
-| AI Ecosystem Fluency | Do you know the tools and how they fit together? | Familiar with current LLM capabilities, embedding strategies, RAG patterns, evaluation frameworks and guardrails tooling. |
-| Pragmatism | Can you ship something real with limited resources? | MVP scoped to days, not months. Clear build vs. buy. Acknowledges tradeoffs. |
-| Design Taste | Does the solution feel good to use? | Natural conversational UX. Graceful error handling. Disclosures woven in without disrupting the experience. |
+| Stakeholder empathy | Whether the right problem and the right user were chosen | Built around how contractors work on site and how a homeowner feels while deciding on financing, not around the technology |
+| Technical depth | Whether this is a real system design | Named models with reasons; latency, cost and context limits handled; failure modes anticipated |
+| AI ecosystem fluency | Whether the current tools are known and combined well | Working knowledge of today's model capabilities, embeddings and retrieval patterns, evaluation harnesses and guardrail tooling |
+| Pragmatism | Whether something real can ship with little | An MVP measured in days; build-versus-buy stated; tradeoffs named rather than waved away |
+| Design taste | Whether it is good to use | A conversation that reads naturally; errors handled gracefully; disclosures present without getting in the way |
 
 ## 13. Open questions and ambiguities
 

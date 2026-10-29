@@ -669,11 +669,15 @@ export function storeOptions(
   return { options: copy(record), event_id: event.event_id };
 }
 
-/** Attaches the judged explanation text to an Options record, once. */
+/**
+ * Attaches the judged explanation body to an Options record, once. `question` is the contractor's
+ * question that ended the draft; the audit keeps it, the record and the homeowner view never do.
+ */
 export function attachExplanation(
   ctx: Ctx,
   options_id: string,
   text: string,
+  question: string | null = null,
 ): { event_id: string } {
   requireApplication(ctx);
   const record = storeWriter().options.get(options_id);
@@ -683,7 +687,7 @@ export function attachExplanation(
   if (record.explanation !== undefined) {
     throw new CommandError("These payment options already have an explanation.");
   }
-  const event = audit.emit(ctx, "options.explained", { options_id, text });
+  const event = audit.emit(ctx, "options.explained", { options_id, text, question });
   record.explanation = text;
   return { event_id: event.event_id };
 }

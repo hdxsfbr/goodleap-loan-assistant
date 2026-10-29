@@ -5,7 +5,7 @@ what happened to it. Item numbers refer to the Detailed Implementation Plan in
 [the internal design](designs/loan-assistant-design.md) (section "Build order and cut line").
 Updated at every change of state, not just at the end of a wave.
 
-Last updated: 2026-10-28 17:42 PDT
+Last updated: 2026-10-28 18:28 PDT
 
 ## Waves
 
@@ -105,8 +105,9 @@ Dropped:
   passed every golden case and failed only the tie tests, so the tie tests are what guard the
   rounding mode).
 * Interpretations accepted and written into design item 32: the APR cell of a promotional
-  product shows the standard APR; the deferred option gets the single-form schedule line plus
-  the consequence line. `calculatorValues` also lists the promo and post-promo month counts
+  product shows the standard APR (reversed after the requirements audit: it now shows the
+  actuarial APR of the disclosed schedule, see "Requirements audit" below); the deferred option
+  gets the single-form schedule line plus the consequence line. `calculatorValues` also lists the promo and post-promo month counts
   ("18 months", "102 months") so the disclosure lines pass the number-match check.
 * One edit outside the brief, accepted: a `tests/foundation.test.ts` case that asserted an
   unwired catalog now calls the mock directly with no source.
@@ -384,6 +385,42 @@ Deferred to the final pass: merging `server/extraction/llm.ts` into `server/llm/
   so. No secrets or developer commentary in the tree (checked at every commit).
 * A requirements audit of the brief against the repository runs as the last step; its findings
   are fixed or disclosed before the final push.
+
+### Requirements audit (Opus agent, 13 findings)
+
+Code fixes, all landed with tests:
+
+1. The TILA APR cell showed the product's standard rate, so Option C read 17.99% beside a
+   $0.00 finance charge and Option B 12.99% against a schedule worth 8.96%. The calculator now
+   computes the actuarial APR of the disclosed schedule (Regulation Z Appendix J, monthly
+   periods, bisection, cross-checked by Newton and an exact BigInt bracket): 9.99%, 8.96%,
+   0.00%. Both rates stay in `calculator_values`.
+2. A contractor-directed question ("Use $40,000 as the requested amount?") was part of the
+   explanation the homeowner view prints. The prompt now puts it on a marked final line, the
+   server splits it into `explanation.question`, only the body is attached to the Options
+   record, and the panel shows the question in its own bubble. Verified live on the "$40K"
+   case.
+3. The product range from the brief ($5,000 to $100,000, 5 to 25 years) is enforced by the
+   calculator with user-facing messages the copilot shows as the proposals-line note; the form
+   gained the 300-month term.
+
+Write-up fixes: the README's confidentiality claim reworded (the PRD restates the brief and
+now paraphrases its rubric), the figure-binding claim narrowed to what the code does, the
+rejected angles, the simplifying assumptions and a build-versus-buy paragraph restored to the
+submission document, its length stated honestly, a deployment guide (`docs/deployment.md`) for
+the brief's third deliverable, a dated `docs/test-results.md`, the time budget in
+`docs/ai-usage.md`, and the minor wording items (end state `documents_reviewed`, "every
+locatable value", "whichever is larger", monitoring in the described-only list). Disclosed
+rather than fixed: the direct Anthropic path not exercised, no upload control, two live turns
+over the 10 s budget after a regeneration, no prompt-injection case, three `npm audit`
+advisories, no CI.
+
+### Final state
+
+* `bash scripts/verify.sh` on the final tree: build ok, 588 tests, server with the key, browser walk
+  with seven screenshots and no page errors. The script now refuses a busy port and kills its
+  server by port (a previous run's `tsx` child had outlived `npm start` and blocked the port).
+* Every commit on GitLab `main`; the working tree is clean after the final commit.
 
 ## Decisions made during the build
 

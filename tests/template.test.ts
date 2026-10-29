@@ -89,7 +89,7 @@ describe("disclosure block", () => {
       {
         label: "Option B",
         product_id: "zero_intro_18m",
-        apr: "12.99%",
+        apr: "8.96%",
         finance_charge: "$16,741.93",
         amount_financed: "$30,000.00",
         total_of_payments: "$46,741.93",
@@ -107,7 +107,7 @@ describe("disclosure block", () => {
       {
         label: "Option C",
         product_id: "deferred_12m",
-        apr: "17.99%",
+        apr: "0.00%",
         finance_charge: "$0.00",
         amount_financed: "$30,000.00",
         total_of_payments: "$30,000.00",
@@ -121,6 +121,30 @@ describe("disclosure block", () => {
     expect(text).toContain("$602.83");
     expect(text).toContain(ESTIMATE_STATEMENT);
     expect(text).toContain(RESPA_LINE);
+  });
+
+  it("prints the APR of the schedule shown, not the product's standard rate", () => {
+    const result = resultFor();
+    const block = renderDisclosureBlock(result.options);
+    const display = renderOptionsDisplay(result.options);
+    expect(block.options.map((option) => option.apr)).toEqual(["9.99%", "8.96%", "0.00%"]);
+    expect(display.map((entry) => entry.apr_text)).toEqual(block.options.map((option) => option.apr));
+    // The standard rates stay on the options, and only the schedule's rate is printed.
+    expect(result.options.map((option) => option.apr_bps)).toEqual([999, 1299, 1799]);
+    expect(blockText(block)).not.toMatch(/12\.99%|17\.99%/);
+    // Option C: no finance charge and a 0.00% APR on the same schedule; the consequence line is unchanged.
+    expect(block.options[2]?.finance_charge).toBe("$0.00");
+    expect(block.options[2]?.consequence_line).toBe(
+      "If the balance is not paid in full by month 12, $5,149.63 of interest is added and the payment becomes $602.83 for the remaining 108 months.",
+    );
+  });
+
+  it("refuses to disclose an option that carries no schedule APR", () => {
+    const [fixed] = resultFor("fixed_10y").options;
+    if (!fixed) throw new Error("expected an option");
+    const { schedule_apr_bps: _omitted, ...withoutScheduleApr } = fixed;
+    expect(() => renderDisclosureBlock([withoutScheduleApr])).toThrow(/schedule_apr_bps/);
+    expect(() => renderOptionsDisplay([withoutScheduleApr])).toThrow(/schedule_apr_bps/);
   });
 
   it("renders all three options in the order given, with the consequence only on the deferred one", () => {
@@ -212,14 +236,14 @@ describe("options display", () => {
         product_id: "zero_intro_18m",
         payment_text: "$250.00 a month for the first 18 months, then $414.14 a month",
         term_text: "120 months",
-        apr_text: "12.99%",
+        apr_text: "8.96%",
       },
       {
         label: "Option C",
         product_id: "deferred_12m",
         payment_text: "$2,500.00 a month for 12 months",
         term_text: "120 months",
-        apr_text: "17.99%",
+        apr_text: "0.00%",
       },
     ]);
     for (const entry of display) expect(OptionDisplaySchema.parse(entry)).toEqual(entry);
@@ -238,8 +262,9 @@ describe("options display", () => {
       "Option B",
       "Option A",
     ]);
-    const oneMonth = calculate({ amount_cents: AMOUNT_CENTS, term_months: 1, products: CATALOG, product_ids: ["fixed_10y"] });
-    expect(renderOptionsDisplay(oneMonth.options)[0]?.term_text).toBe("1 month");
+    // The calculator takes no term under 60 months, so the singular wording is exercised on an option edited to one.
+    const oneMonth = { ...sixty.options[0], term_months: 1 } as (typeof sixty.options)[number];
+    expect(renderOptionsDisplay([oneMonth])[0]?.term_text).toBe("1 month");
   });
 
   it("is a pure function of the options", () => {

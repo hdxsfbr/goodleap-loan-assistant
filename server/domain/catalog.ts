@@ -15,6 +15,15 @@ import type { Catalog, CatalogProduct } from "@shared/schemas";
 /** The shape version the calculator checks. It changes when the shape of a product row changes. */
 export const CATALOG_SCHEMA_VERSION = 1;
 
+/**
+ * The range every product is offered in: loan amounts from $5,000.00 to $100,000.00 and terms from
+ * 5 to 25 years. The calculator refuses a request outside it.
+ */
+export const MIN_LOAN_AMOUNT_CENTS = 500_000;
+export const MAX_LOAN_AMOUNT_CENTS = 10_000_000;
+export const MIN_LOAN_TERM_MONTHS = 60;
+export const MAX_LOAN_TERM_MONTHS = 300;
+
 const FIXED_TERM_MONTHS = 120;
 const FIXED_APR_BPS = 999;
 
@@ -60,8 +69,10 @@ const ZERO_INTRO_18M: CatalogProduct = {
     `${ZERO_INTRO_PROMO_MONTHS}, interest of ${formatApr(ZERO_INTRO_STANDARD_APR_BPS)} APR applies ` +
     `to the balance still owed, and that balance is repaid in level payments over the remaining ` +
     `${ZERO_INTRO_TERM_MONTHS - ZERO_INTRO_PROMO_MONTHS} months. The no-interest rate applies ` +
-    `only during the promotional period. The term of this product is fixed at ` +
-    `${ZERO_INTRO_TERM_MONTHS} months and does not change with a requested term.`,
+    `only during the promotional period. The APR in the disclosure is the annual percentage rate ` +
+    `of the whole payment schedule, so it is lower than the standard rate. The term of this ` +
+    `product is fixed at ${ZERO_INTRO_TERM_MONTHS} months and does not change with a requested ` +
+    `term.`,
 };
 
 const DEFERRED_12M: CatalogProduct = {
@@ -82,8 +93,10 @@ const DEFERRED_12M: CatalogProduct = {
     `calculated monthly on the balance owed, and the new balance is repaid in level payments ` +
     `over the remaining ${DEFERRED_TERM_MONTHS - DEFERRED_PROMO_MONTHS} months. Whenever the ` +
     `no-interest outcome is described, what happens if the balance is not paid in full must be ` +
-    `described with it. The term of this product is fixed at ${DEFERRED_TERM_MONTHS} months and ` +
-    `does not change with a requested term.`,
+    `described with it. The APR in the disclosure is the annual percentage rate of the paid-in-full ` +
+    `payment schedule; it is not the rate that applies if the balance is not paid in full. The term ` +
+    `of this product is fixed at ${DEFERRED_TERM_MONTHS} months and does not change with a ` +
+    `requested term.`,
 };
 
 /** The catalog, in option order: the first product is Option A, the second Option B, the third Option C. */

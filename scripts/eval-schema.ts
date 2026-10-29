@@ -127,16 +127,29 @@ export const GuardrailExpectSchema = z
   );
 export type GuardrailExpect = z.infer<typeof GuardrailExpectSchema>;
 
+/**
+ * The question for the contractor that ends the last turn's reply (the `Question for you:` line,
+ * split off the explanation). `present: false` demands none. `contains` parts must each appear in
+ * it, after folding case and spacing, so a case can pin the figure the question names.
+ */
+export const QuestionExpectSchema = z
+  .object({ present: z.boolean(), contains: z.array(z.string().min(1)) })
+  .strict()
+  .refine((q) => q.present || q.contains.length === 0, "contains needs present: true");
+export type QuestionExpect = z.infer<typeof QuestionExpectSchema>;
+
 export const ExpectSchema = z
   .object({
     tool_calls: z.array(ToolCallExpectSchema),
     proposals: z.array(ProposalExpectSchema),
     non_proposals: z.array(NonProposalExpectSchema),
     guardrail: GuardrailExpectSchema,
-    /** The shown reply of the last turn, whole, after folding case, spacing and typographic quotes. */
+    /** The shown reply of the last turn, whole, after folding case, spacing and typographic quotes. It is the explanation body: the question is split off. */
     reply_equals: z.string().min(1).nullable(),
     reply_contains: z.array(z.string().min(1)),
     reply_not_contains: z.array(z.string().min(1)),
+    /** The question for the contractor on the last turn; absent when the case does not look at it. */
+    question: QuestionExpectSchema.optional(),
   })
   .strict();
 export type Expect = z.infer<typeof ExpectSchema>;
@@ -239,7 +252,8 @@ export interface ObservedTurn {
   verdicts: ObservedVerdict[];
   /** The model's draft replies in order: one, or two after a regeneration. */
   drafts: string[];
-  final: { kind: "explanation" | "fallback" | "none"; text: string };
+  /** What the contractor read: the explanation body (or the fallback text) and, after it, the question for the contractor. */
+  final: { kind: "explanation" | "fallback" | "none"; text: string; question: string | null };
   errors: { code: string; message: string }[];
   /** The stream ended with a `done` line. */
   done: boolean;
@@ -361,10 +375,10 @@ export function observeTurn(text: string, lines: readonly StreamLine[], events: 
   const shown = lines.findLast((line) => line.type === "explanation" || line.type === "fallback");
   const final: ObservedTurn["final"] =
     shown?.type === "explanation"
-      ? { kind: "explanation", text: shown.text }
+      ? { kind: "explanation", text: shown.text, question: shown.question }
       : shown?.type === "fallback"
-        ? { kind: "fallback", text: shown.text }
-        : { kind: "none", text: "" };
+        ? { kind: "fallback", text: shown.text, question: null }
+        : { kind: "none", text: "", question: null };
 
   return {
     text,
@@ -547,7 +561,7 @@ export function evaluateCase(c: EvalCase, turns: readonly ObservedTurn[]): Failu
   }
 
   // The reply the contractor read on the last turn.
-  const shown = turns.at(-1)?.final ?? { kind: "none" as const, text: "" };
+  const shown = turns.at(-1)?.final ?? { kind: "none" as const, text: "", question: null };
   const reply = foldText(shown.text);
   const needsReply = expect.reply_equals !== null || expect.reply_contains.length > 0 || expect.reply_not_contains.length > 0;
   if (needsReply && shown.kind === "none") {
@@ -561,6 +575,26 @@ export function evaluateCase(c: EvalCase, turns: readonly ObservedTurn[]): Failu
     }
     for (const part of expect.reply_not_contains) {
       if (reply.includes(foldText(part))) fail("reply_not_contains", `the reply contains "${part}": "${clip(shown.text, 160)}"`);
+    }
+  }
+
+  // The question for the contractor, on the last turn.
+  if (expect.question) {
+    const question = shown.question;
+    if (!expect.question.present) {
+      if (question !== null) fail("question", `no question was expected; the reply ended with "${clip(question, 160)}"`);
+    } else if (question === null) {
+      fail(
+        "question",
+        shown.kind === "explanation"
+          ? `expected a question for the contractor; the explanation had none: "${clip(shown.text, 160)}"`
+          : "expected a question for the contractor; no explanation was shown",
+      );
+    } else {
+      const folded = foldText(question);
+      for (const part of expect.question.contains) {
+        if (!folded.includes(foldText(part))) fail("question", `the question lacks "${clip(part, 80)}": "${clip(question, 160)}"`);
+      }
     }
   }
 

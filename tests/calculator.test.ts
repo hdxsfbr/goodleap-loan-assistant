@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney } from "@shared/format";
+import { TERM_MONTH_OPTIONS } from "@shared/application-schema";
+import { formatApr } from "@shared/format";
 import { normalizeFigure } from "@shared/normalize";
-import { CatalogSchema, type Catalog, type CatalogProduct, type PaymentOption } from "@shared/schemas";
-import { CATALOG, CATALOG_SCHEMA_VERSION } from "../server/domain/catalog.js";
+import {
+  CatalogSchema,
+  type Catalog,
+  type CatalogProduct,
+  type PaymentOption,
+  type ScheduleRow,
+} from "@shared/schemas";
+import {
+  CATALOG,
+  CATALOG_SCHEMA_VERSION,
+  MAX_LOAN_AMOUNT_CENTS,
+  MAX_LOAN_TERM_MONTHS,
+  MIN_LOAN_AMOUNT_CENTS,
+  MIN_LOAN_TERM_MONTHS,
+} from "../server/domain/catalog.js";
 import {
   MAX_AMOUNT_CENTS,
   MAX_TERM_MONTHS,
@@ -13,6 +27,7 @@ import {
   divideRoundHalfEven,
   levelPaymentCents,
   monthsAfterPromo,
+  scheduleAprBps,
 } from "../server/domain/payments/calculator.js";
 import { AppError, CommandError } from "../server/errors.js";
 import { renderOptionsDisplay } from "../server/domain/disclosures/template.js";
@@ -90,6 +105,7 @@ describe("golden cases", () => {
     expect(option.amount_financed_cents).toBe(usd("$30,000.00"));
     expect(option.term_months).toBe(120);
     expect(option.apr_bps).toBe(999);
+    expect(option.schedule_apr_bps).toBe(999);
     expect(option.promo_apr_bps).toBeUndefined();
     expect(option.promo_payment_cents).toBeUndefined();
     expect(option.consequence).toBeUndefined();
@@ -122,6 +138,7 @@ describe("golden cases", () => {
     expect(option.schedule).toHaveLength(120);
     expect(option.term_months).toBe(120);
     expect(option.apr_bps).toBe(1299);
+    expect(option.schedule_apr_bps).toBe(896);
     expectConsistent(option);
   });
 
@@ -136,6 +153,7 @@ describe("golden cases", () => {
     expect(option.total_of_payments_cents).toBe(usd("$30,000.00"));
     expect(option.amount_financed_cents).toBe(usd("$30,000.00"));
     expect(option.apr_bps).toBe(1799);
+    expect(option.schedule_apr_bps).toBe(0);
     expect(option.promo_apr_bps).toBe(0);
     expectConsistent(option);
   });
@@ -187,6 +205,146 @@ describe("golden cases", () => {
     expect(fixed?.total_of_payments_cents).toBe(usd("$38,235.88"));
     expect(zeroIntro).toEqual(base.options[1]);
     expect(deferred).toEqual(base.options[2]);
+  });
+});
+
+describe("schedule APR", () => {
+  /** Newton's method on the present value from a monthly rate of 0, where it is convex and decreasing: a float method that shares no code with the bisection. */
+  function newtonAprBps(option: PaymentOption): number {
+    const payments = option.schedule.map((row) => row.payment_cents);
+    let rate = 0;
+    for (let step = 0; step < 100; step += 1) {
+      let value = -option.amount_financed_cents;
+      let slope = 0;
+      payments.forEach((payment, index) => {
+        const k = index + 1;
+        value += payment / (1 + rate) ** k;
+        slope -= (k * payment) / (1 + rate) ** (k + 1);
+      });
+      const next = rate - value / slope;
+      const done = Math.abs(next - rate) < 1e-15;
+      rate = next;
+      if (done) break;
+    }
+    return rate * 12 * 10_000;
+  }
+
+  /**
+   * Present value of the schedule less the amount financed, times the common denominator, at the
+   * monthly rate twiceBps / 240000 (that is, twiceBps / 2 basis points of APR), in exact BigInt
+   * arithmetic: the sum of payment_k D^k N^(n-k) less amount N^n with D = 240000, N = D + twiceBps.
+   * Positive means the rate is below the schedule's rate.
+   */
+  function exactExcess(option: PaymentOption, twiceBps: number): bigint {
+    const d = 240_000n;
+    const n = d + BigInt(twiceBps);
+    const count = option.schedule.length;
+    let sum = 0n;
+    option.schedule.forEach((row, index) => {
+      sum += BigInt(row.payment_cents) * d ** BigInt(index + 1) * n ** BigInt(count - index - 1);
+    });
+    return sum - BigInt(option.amount_financed_cents) * n ** BigInt(count);
+  }
+
+  /** The reported APR is the schedule's rate rounded to the nearest basis point, shown by two methods that share nothing with the bisection. */
+  function expectAprAgrees(option: PaymentOption): void {
+    const reported = option.schedule_apr_bps;
+    if (reported === undefined) throw new Error(`${option.product_id} has no schedule APR`);
+    expect(Number.isSafeInteger(reported)).toBe(true);
+    // Float: Newton lands within half a basis point of the integer reported.
+    expect(Math.abs(newtonAprBps(option) - reported)).toBeLessThanOrEqual(0.5 + 1e-6);
+    // Exact: the schedule's rate lies between reported - 1/2 and reported + 1/2 basis points.
+    expect(exactExcess(option, 2 * reported - 1) >= 0n).toBe(true);
+    expect(exactExcess(option, 2 * reported + 1) <= 0n).toBe(true);
+  }
+
+  it("pins the golden APRs at $30,000.00 and prints them through formatApr", () => {
+    // Pinned from an independent Decimal bisection: 999.0041, 895.5451 and 0 basis points.
+    const fixed = price("fixed_10y", "$30,000.00");
+    const zeroIntro = price("zero_intro_18m", "$30,000.00");
+    const deferred = price("deferred_12m", "$30,000.00");
+    expect(fixed.schedule_apr_bps).toBe(999);
+    expect(zeroIntro.schedule_apr_bps).toBe(896);
+    expect(deferred.schedule_apr_bps).toBe(0);
+    expect(formatApr(fixed.schedule_apr_bps ?? Number.NaN)).toBe("9.99%");
+    expect(formatApr(zeroIntro.schedule_apr_bps ?? Number.NaN)).toBe("8.96%");
+    expect(formatApr(deferred.schedule_apr_bps ?? Number.NaN)).toBe("0.00%");
+    // The contract rate is still there, unchanged.
+    expect([fixed.apr_bps, zeroIntro.apr_bps, deferred.apr_bps]).toEqual([999, 1299, 1799]);
+  });
+
+  it("agrees between bisection, Newton's method and an exact rational bracket", () => {
+    let compared = 0;
+    for (const amount of ["$5,000.00", "$7,500.00", "$30,000.00", "$42,500.00", "$99,999.99", "$100,000.00"]) {
+      for (const term of [null, 60, 61, 120, 180, 300]) {
+        const result = calculate({ amount_cents: usd(amount), term_months: term, products: CATALOG });
+        for (const option of result.options) {
+          expectAprAgrees(option);
+          compared += 1;
+        }
+      }
+    }
+    expect(compared).toBe(6 * 6 * 3);
+  });
+
+  it("agrees across catalog rates from a hundredth of a percent to the highest the catalog allows", () => {
+    let compared = 0;
+    for (const bps of [1, 250, 1799, 3600, 100_000]) {
+      const catalog: Catalog = {
+        ...CATALOG,
+        products: [
+          { ...product("fixed_10y"), apr_bps: bps, standard_apr_bps: bps },
+          { ...product("zero_intro_18m"), apr_bps: bps, standard_apr_bps: bps },
+          { ...product("deferred_12m"), apr_bps: bps, standard_apr_bps: bps },
+        ],
+      };
+      for (const amount of ["$5,000.00", "$30,000.00"]) {
+        for (const term of [60, 300]) {
+          for (const option of calculate({ amount_cents: usd(amount), term_months: term, products: catalog }).options) {
+            expectAprAgrees(option);
+            compared += 1;
+          }
+        }
+      }
+    }
+    expect(compared).toBe(5 * 2 * 2 * 3);
+  });
+
+  it("is the contract rate for a level schedule, below it for free months, and 0.00% with no finance charge", () => {
+    for (const amount of ["$5,000.00", "$7,500.00", "$30,000.00", "$99,999.99", "$100,000.00"]) {
+      for (const term of [60, 61, 120, 300]) {
+        const [fixed, zeroIntro, deferred] = calculate({ amount_cents: usd(amount), term_months: term, products: CATALOG }).options;
+        expect(fixed?.schedule_apr_bps, `${amount} over ${term} months`).toBe(fixed?.apr_bps);
+        expect(zeroIntro?.schedule_apr_bps).toBeLessThan(zeroIntro?.apr_bps ?? 0);
+        expect(deferred?.finance_charge_cents).toBe(0);
+        expect(deferred?.schedule_apr_bps).toBe(0);
+      }
+    }
+  });
+
+  it("is the rate that discounts the schedule to the amount financed, in closed form for one payment", () => {
+    const row = (payment_cents: number, interest_cents: number): ScheduleRow => ({
+      month: 1,
+      payment_cents,
+      interest_cents,
+      principal_cents: payment_cents - interest_cents,
+      balance_cents: 0,
+    });
+    // $100.00 repaid with $101.00 a month later is 1% a month, 12.00% APR.
+    expect(scheduleAprBps(10_000, [row(10_100, 100)])).toBe(1200);
+    expect(scheduleAprBps(10_000, [row(10_050, 50)])).toBe(600);
+    expect(scheduleAprBps(10_000, [row(10_000, 0)])).toBe(0);
+    expect(() => scheduleAprBps(0, [row(10_000, 0)])).toThrow(RangeError);
+    expect(() => scheduleAprBps(10_000, [])).toThrow(RangeError);
+  });
+
+  it("is listed with the contract rate among the figures prose may contain", () => {
+    const values = calculatorValues(price("zero_intro_18m", "$30,000.00"));
+    expect(values).toContain("8.96%");
+    expect(values).toContain("12.99%");
+    expect(calculatorValues(price("deferred_12m", "$30,000.00"))).toEqual(
+      expect.arrayContaining(["0.00%", "17.99%"]),
+    );
   });
 });
 
@@ -366,20 +524,29 @@ describe("arithmetic", () => {
   }
 
   it("rounds a monthly interest of exactly half a cent to the even cent", () => {
-    // 12.00% APR is 1% a month: $2.50 owes 2.5 cents, which half-even rounds to 2 (half-up would give 3).
+    // 12.00% APR is 1% a month: $5,000.50 owes 5000.5 cents, which half-even rounds to 5000 (half-up would give 5001).
     const tie = fixedAt(1200);
-    const result = calculate({ amount_cents: 250, term_months: 12, products: tie, product_ids: ["fixed_10y"] });
+    const result = calculate({ amount_cents: 500_050, term_months: 60, products: tie, product_ids: ["fixed_10y"] });
     const option = result.options[0];
+    // Pinned from an independent exact-rational (Fraction) reference computation.
+    expect(option?.payment_cents).toBe(11_123);
     expect(option?.schedule[0]).toEqual({
       month: 1,
-      payment_cents: 22,
-      interest_cents: 2,
-      principal_cents: 20,
-      balance_cents: 230,
+      payment_cents: 11_123,
+      interest_cents: 5_000,
+      principal_cents: 6_123,
+      balance_cents: 493_927,
     });
-    // Pinned from the independent Decimal reference computation.
-    expect(option?.finance_charge_cents).toBe(16);
-    expect(option?.total_of_payments_cents).toBe(266);
+    expect(option?.schedule[1]).toEqual({
+      month: 2,
+      payment_cents: 11_123,
+      interest_cents: 4_939,
+      principal_cents: 6_184,
+      balance_cents: 487_743,
+    });
+    expect(option ? finalPayment(option) : 0).toBe(11_144);
+    expect(option?.finance_charge_cents).toBe(167_351);
+    expect(option?.total_of_payments_cents).toBe(667_401);
     if (option) expectConsistent(option);
   });
 
@@ -387,12 +554,18 @@ describe("arithmetic", () => {
     // 350 cents at 12.00% for one month owes 350 x 1.01 = 353.5 cents. Half-even is 354 (353 is odd);
     // a float computation lands on 353 and then disagrees with the schedule's final payment.
     expect(levelPaymentCents(350, 1200, 1)).toBe(354);
-    const result = calculate({ amount_cents: 350, term_months: 1, products: fixedAt(1200), product_ids: ["fixed_10y"] });
+    // The calculator takes no loan that small, so the schedule side of the tie is a loan with no
+    // interest: $5,000.70 over 60 months is 8334.5 cents a month, which half-even rounds to 8334
+    // (half-up would give 8335), and the last payment clears the 30-cent residual.
+    expect(levelPaymentCents(500_070, 0, 60)).toBe(8_334);
+    const result = calculate({ amount_cents: 500_070, term_months: 60, products: fixedAt(0), product_ids: ["fixed_10y"] });
     const option = result.options[0];
-    expect(option?.payment_cents).toBe(354);
-    expect(option ? finalPayment(option) : 0).toBe(354);
-    expect(option?.finance_charge_cents).toBe(4);
-    expect(option?.total_of_payments_cents).toBe(354);
+    expect(option?.payment_cents).toBe(8_334);
+    expect(option?.schedule[58]?.payment_cents).toBe(8_334);
+    expect(option ? finalPayment(option) : 0).toBe(8_364);
+    expect(option?.finance_charge_cents).toBe(0);
+    expect(option?.total_of_payments_cents).toBe(500_070);
+    expect(option?.schedule_apr_bps).toBe(0);
     if (option) expectConsistent(option);
   });
 
@@ -440,9 +613,20 @@ describe("arithmetic", () => {
   });
 
   it("returns whole cents and a closed schedule for every product, amount and term", () => {
-    const amounts = [1, 7, 100, 12_345, 750_000, 750_001, 3_000_000, 3_000_001, 49_999_999, MAX_AMOUNT_CENTS];
+    const amounts = [
+      MIN_LOAN_AMOUNT_CENTS,
+      MIN_LOAN_AMOUNT_CENTS + 1,
+      750_000,
+      750_001,
+      1_234_567,
+      3_000_000,
+      3_000_001,
+      4_999_999,
+      MAX_LOAN_AMOUNT_CENTS - 1,
+      MAX_LOAN_AMOUNT_CENTS,
+    ];
     for (const amount_cents of amounts) {
-      for (const term_months of [null, 1, 12, 60, 84, 120, 180, 600]) {
+      for (const term_months of [null, MIN_LOAN_TERM_MONTHS, 61, 84, 120, 180, 299, MAX_LOAN_TERM_MONTHS]) {
         const result = calculate({ amount_cents, term_months, products: CATALOG });
         for (const option of result.options) {
           expectConsistent(option);
@@ -461,12 +645,13 @@ describe("arithmetic", () => {
     }
   });
 
-  it("prices the largest amount at the largest APR and term as whole, closed schedules", () => {
+  it("prices the largest loan at the largest APR and term as whole, closed schedules", () => {
+    // The catalog may carry terms up to MAX_TERM_MONTHS; a requested term stops at 25 years.
     const steep: Catalog = {
       ...CATALOG,
       products: CATALOG.products.map((p) => ({ ...p, term_months: MAX_TERM_MONTHS, apr_bps: 100_000, standard_apr_bps: 100_000 })),
     };
-    const result = calculate({ amount_cents: MAX_AMOUNT_CENTS, term_months: MAX_TERM_MONTHS, products: steep });
+    const result = calculate({ amount_cents: MAX_LOAN_AMOUNT_CENTS, term_months: MAX_LOAN_TERM_MONTHS, products: steep });
     expect(result.options).toHaveLength(3);
     for (const option of result.options) {
       expectConsistent(option);
@@ -474,6 +659,12 @@ describe("arithmetic", () => {
         expect(Number.isSafeInteger(value)).toBe(true);
       }
     }
+  });
+
+  it("keeps the payment arithmetic exact up to the representable ceiling, which is wider than the product range", () => {
+    expect(MAX_AMOUNT_CENTS).toBeGreaterThan(MAX_LOAN_AMOUNT_CENTS);
+    expect(Number.isSafeInteger(levelPaymentCents(MAX_AMOUNT_CENTS, 100_000, MAX_TERM_MONTHS))).toBe(true);
+    expect(levelPaymentCents(100, 999, 12)).toBeGreaterThan(0);
   });
 
   it("leaves a deferred-interest residual in the last payment", () => {
@@ -485,21 +676,53 @@ describe("arithmetic", () => {
 });
 
 describe("inputs", () => {
-  const price60 = (amount_cents: number, term_months: number | null) =>
+  const priceFor = (amount_cents: number, term_months: number | null) =>
     calculate({ amount_cents, term_months, products: CATALOG });
+  const AMOUNT_MESSAGE = "Loan amounts are between $5,000.00 and $100,000.00.";
+  const TERM_MESSAGE = "Terms are between 5 and 25 years.";
 
-  it("rejects an amount that is not a positive whole number of cents within bounds", () => {
-    for (const amount of [0, -100, 12.5, Number.NaN, MAX_AMOUNT_CENTS + 1]) {
-      const err = caught(() => price60(amount, null));
-      expect(err).toBeInstanceOf(CommandError);
-      expect((err as CommandError).message).toContain(formatMoney(MAX_AMOUNT_CENTS));
+  it("states the product range from the brief: $5,000 to $100,000 over 5 to 25 years", () => {
+    expect([MIN_LOAN_AMOUNT_CENTS, MAX_LOAN_AMOUNT_CENTS]).toEqual([usd("$5,000.00"), usd("$100,000.00")]);
+    expect([MIN_LOAN_TERM_MONTHS, MAX_LOAN_TERM_MONTHS]).toEqual([5 * 12, 25 * 12]);
+  });
+
+  it("accepts $5,000.00 and $100,000.00 and rejects anything outside them with the range in the message", () => {
+    for (const amount of ["$5,000.00", "$5,000.01", "$99,999.99", "$100,000.00"]) {
+      expect(() => priceFor(usd(amount), null), amount).not.toThrow();
+    }
+    const rejected = [usd("$4,999.99"), usd("$100,000.01"), 0, -100, 1, 12.5, Number.NaN, Number.POSITIVE_INFINITY, MAX_AMOUNT_CENTS + 1];
+    for (const amount of rejected) {
+      const err = caught(() => priceFor(amount, null));
+      expect(err, String(amount)).toBeInstanceOf(CommandError);
+      expect((err as CommandError).message).toBe(AMOUNT_MESSAGE);
+      expect((err as CommandError).status).toBe(400);
     }
   });
 
-  it("rejects a term that is not a whole number of months within bounds", () => {
-    for (const term of [0, -12, 60.5, 601]) {
-      expect(caught(() => price60(1_000_000, term))).toBeInstanceOf(CommandError);
+  it("accepts a term of 60 and of 300 months and rejects anything outside them with the range in the message", () => {
+    for (const term of [60, 61, 120, 299, 300]) expect(() => priceFor(1_000_000, term), String(term)).not.toThrow();
+    for (const term of [59, 301, 0, -12, 60.5, 600, 601, Number.NaN]) {
+      const err = caught(() => priceFor(1_000_000, term));
+      expect(err, String(term)).toBeInstanceOf(CommandError);
+      expect((err as CommandError).message).toBe(TERM_MESSAGE);
+      expect((err as CommandError).status).toBe(400);
     }
+    expect(() => priceFor(1_000_000, null)).not.toThrow();
+  });
+
+  it("checks a requested term whichever products are priced, and the amount before the term", () => {
+    const err = caught(() =>
+      calculate({ amount_cents: 1_000_000, term_months: 301, products: CATALOG, product_ids: ["deferred_12m"] }),
+    );
+    expect((err as CommandError).message).toBe(TERM_MESSAGE);
+    expect((caught(() => priceFor(usd("$4,999.99"), 59)) as CommandError).message).toBe(AMOUNT_MESSAGE);
+  });
+
+  it("offers on the form only terms the calculator accepts, up to 25 years", () => {
+    const terms = TERM_MONTH_OPTIONS.map(Number);
+    expect(terms).toContain(MIN_LOAN_TERM_MONTHS);
+    expect(terms).toContain(MAX_LOAN_TERM_MONTHS);
+    for (const term of terms) expect(() => priceFor(1_000_000, term), String(term)).not.toThrow();
   });
 
   it("rejects an empty or unknown product selection", () => {
@@ -527,6 +750,7 @@ describe("calculatorValues", () => {
         "$414.14",
         "$250.00",
         "12.99%",
+        "8.96%",
         "0.00%",
         "$16,741.93",
         "$30,000.00",
@@ -574,8 +798,8 @@ describe("calculatorValues", () => {
   });
 
   it("covers every figure the options display prints, for any amount and fixed term", () => {
-    for (const amount of ["$1.00", "$30,000.00", "$42,500.00", "$100,000.00"]) {
-      for (const term of [null, 12, 60, 90, 180]) {
+    for (const amount of ["$5,000.00", "$30,000.00", "$42,500.00", "$100,000.00"]) {
+      for (const term of [null, 60, 90, 180, 300]) {
         const result = calculate({ amount_cents: usd(amount), term_months: term, products: CATALOG });
         const display = renderOptionsDisplay(result.options);
         result.options.forEach((option, index) => {
@@ -595,15 +819,17 @@ describe("calculatorValues", () => {
     const years = (term: number): string[] =>
       calculatorValues(price("fixed_10y", "$30,000.00", term)).filter((value) => value.endsWith(" years"));
     expect(years(90)).toEqual(["7.5 years"]);
-    expect(years(6)).toEqual(["0.5 years"]);
-    expect(years(18)).toEqual(["1.5 years"]);
-    expect(years(3)).toEqual(["0.25 years"]);
+    expect(years(66)).toEqual(["5.5 years"]);
+    expect(years(174)).toEqual(["14.5 years"]);
+    expect(years(75)).toEqual(["6.25 years"]);
     expect(years(100)).toEqual(["8.33 years"]);
-    expect(years(1)).toEqual(["0.08 years"]);
-    expect(years(7)).toEqual(["0.58 years"]);
+    expect(years(61)).toEqual(["5.08 years"]);
+    expect(years(67)).toEqual(["5.58 years"]);
     expect(years(125)).toEqual(["10.42 years"]);
-    expect(years(12)).toEqual(["1 years"]);
+    expect(years(299)).toEqual(["24.92 years"]);
+    expect(years(60)).toEqual(["5 years"]);
     expect(years(120)).toEqual(["10 years"]);
+    expect(years(300)).toEqual(["25 years"]);
     expect(calculatorValues(price("fixed_10y", "$30,000.00", 90))).toContain("90 months");
   });
 

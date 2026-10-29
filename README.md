@@ -13,7 +13,7 @@ project for GoodLeap through Gauntlet AI's partner program (brief version 1, upd
 
 ## Where to look first
 
-1. [docs/design-document.md](docs/design-document.md): the six-section submission, under 2,000 words.
+1. [docs/design-document.md](docs/design-document.md): the six-section submission, about 2,200 words with its rollout table, which renders to three to four pages at 11 pt against the brief's two to three; every section carries a decision, and the internal design holds the detail.
 2. "Run it in five minutes" and the walkthrough below: the copilot, the homeowner view, a proposal from
    the contractor's words, the audit page, then submit and the reviewer screen.
 3. [docs/designs/loan-assistant-design.md](docs/designs/loan-assistant-design.md): the internal design
@@ -29,8 +29,13 @@ not exercise a guardrail block on them (the scripted tests do); the judge set ha
 measure its stated thresholds; number-match reads "N monthly payments" as a count, so an invented count
 passes it; the extraction client exists twice (`server/extraction/llm.ts` beside `server/llm/client.ts`)
 and is merged after submission because merging changes the recorded fixture; the no-model button and the
-kill switches were verified from code and tests, not in a browser; there is no CI, so every number in this
-README comes from a local run on the date given.
+kill switches were verified from code and tests, not in a browser; every live run during the build went
+through OpenRouter, so the direct Anthropic path (same SDK, no base URL) was not exercised; documents come
+from "Load demo project" (there is no upload control); two of the last live eval turns took 11 to 12
+seconds, over the 10 s p95 budget, because a judge-triggered regeneration doubled the model calls; the eval
+set has no prompt-injection case; `npm audit` reports three advisories in dependencies (one high) that were
+not addressed; there is no CI, so every number in this README comes from a local run on the date given and
+is recorded in [docs/test-results.md](docs/test-results.md).
 
 ## The problem
 
@@ -108,8 +113,9 @@ run; the figures do not.
 2. **Payment options in the chat (CUJ 1).** Type `They want the lowest monthly payment, what are the
    options?` and send it. The options table appears first, headed "Based on $30,000.00 over 120 months": Option
    A, a 10-year fixed loan at $396.29 a month and 9.99% APR; Option B, 0% for 18 months, at $250.00 a month
-   for 18 months and then $414.14, 12.99% APR; Option C, 12 months deferred interest, at $2,500.00 a month for
-   12 months, 17.99% APR. Under it is "Estimates only. Not an offer of credit; subject to credit approval."
+   for 18 months and then $414.14, 8.96% APR (the actuarial rate of that schedule; interest after the
+   promotion runs at 12.99%); Option C, 12 months deferred interest, at $2,500.00 a month for 12 months,
+   0.00% APR when paid in full. Under it is "Estimates only. Not an offer of credit; subject to credit approval."
    A few seconds later the explanation follows. It names options by label and says what happens when a
    promotion ends. (In a test run on 2026-10-28 the table took about 2 seconds and the whole reply about 6.)
 
@@ -274,7 +280,7 @@ The build log, [docs/build-log.md](docs/build-log.md), records what each wave bu
 | `npm test` | Runs every test with vitest. No key needed. One test makes a live model call when a key is in `.env`. |
 | `npm run build` | Type-checks the server and the web app and builds the web app. |
 | `npm run eval` | Needs a key. Runs the 15 recorded copilot conversations against the real model and checks each expectation (tool calls, proposals and non-proposals, the fixed replies, the guardrail path); `-- --judge` adds the 20 judge cases, `-- --judge-only` runs only those, `-- --only <id>` one case, `-- --json <path>` writes the full results, `-- --list` needs no key. Exit code 1 on any failure, 2 without a key. About 60 model calls and 90 seconds per full run. |
-| `bash scripts/verify.sh` | Builds, runs the suite, boots a throwaway server on port 3470, checks its health endpoint, and runs the browser walk when Google Chrome and `playwright-core` are present (`--no-walk` skips it, `--port` and `--out` change the port and the output directory). One summary line per step. |
+| `bash scripts/verify.sh` | Builds, runs the suite, boots a throwaway server on port 3470, checks its health endpoint, and runs the browser walk when Google Chrome and `playwright-core` are present (`--no-walk` skips it, `--port` and `--out` change the port and the output directory). Needs `curl` and `python3`. One summary line per step. |
 | `npm run smoke` | Needs a key. Checks, against the real endpoint, a strict tool call, prompt caching and the judge's block and pass. Add `-- --probes` for the API behavior probes. Without a key it prints SKIP. |
 | `node scripts/ui-walk.mjs` | Drives the running app in headless Chrome through chat turns, the homeowner view and the audit page, saving a screenshot after each step. Needs the server running, Google Chrome and `playwright-core` (not a project dependency: `NODE_PATH=<dir with node_modules/playwright-core>`). Flags are listed at the top of the file. |
 | `scripts/review-bundle.sh` | Prints the uncommitted changes, or named files, plus chosen line ranges of the design, as one text stream for an independent reviewer. |
@@ -298,6 +304,8 @@ docs/
   audit-schema.md             Every audit event, its fields and the PII class of each
   states.md                   Application, proposal, document, review task and discrepancy states, and the commands that move them
   evals.md                    The evaluation sets, what is built, and how to run each
+  deployment.md               Deployment guide: local, container, and what changes for production
+  test-results.md             Dated local runs: the suite, the evals, the verify script, a fresh clone
   ai-usage.md                 How AI was used to build this, what the author decided, what the models got wrong
   build-log.md                What each build wave built, every review finding and every decision
   designs/
@@ -315,5 +323,5 @@ scripts/                      Smoke check, fixture recorder, browser walk, revie
 tests/                        vitest tests
 ```
 
-The brief's attached take-home PDF is marked Confidential, so neither the PDF nor its text is
-committed. Its requirements are captured in the PRD.
+The brief's attached take-home PDF is marked Confidential and is not committed. [docs/PRD.md](docs/PRD.md)
+restates its requirements and its five assessment dimensions in this repository's own words.

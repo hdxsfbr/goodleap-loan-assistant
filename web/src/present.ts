@@ -33,6 +33,7 @@ const ENUM_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = 
     "120": "120 months",
     "180": "180 months",
     "240": "240 months",
+    "300": "300 months",
   },
   selected_product_id: {
     fixed_10y: "10-year fixed",

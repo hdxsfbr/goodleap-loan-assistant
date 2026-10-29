@@ -6,6 +6,8 @@ import { OLDER_OPTIONS_CAPTION, UNREADABLE_REPLY_MESSAGE } from "../web/src/copy
 import { conversationStore } from "../web/src/hooks";
 import { loadComponent } from "./helpers/web-components";
 import {
+  EXPLANATION_LINE,
+  EXPLANATION_WITH_QUESTION,
   FOOTER,
   HOMEOWNER_PROPS,
   OPTIONS_DISPLAY,
@@ -204,7 +206,7 @@ describe("assistant panel", () => {
     const turn = conversationStore.sendMessage("app_footer", "Explain the options.");
     reply.write(
       OPTIONS_LINE,
-      { type: "explanation", text: "Option A costs less per month.", footer: FOOTER, event_ids: [] },
+      { ...EXPLANATION_LINE, text: "Option A costs less per month." },
       { type: "done", event_ids: [] },
     );
     reply.close();
@@ -220,7 +222,7 @@ describe("assistant panel", () => {
     vi.stubGlobal("fetch", vi.fn(async () => reply.response));
     const turn = conversationStore.sendMessage("app_fallback", "Write something to read to her.");
     reply.write(
-      { type: "explanation", text: "A draft that was blocked.", footer: null, event_ids: [] },
+      { ...EXPLANATION_WITH_QUESTION, text: "A draft that was blocked.", footer: null },
       {
         type: "fallback",
         text: "I can't phrase that in a way that meets lending rules.",
@@ -234,6 +236,38 @@ describe("assistant panel", () => {
     const html = panel("app_fallback");
     expect(html).toContain("I can&#x27;t phrase that in a way that meets lending rules.");
     expect(html).not.toContain("A draft that was blocked.");
+    expect(html).not.toContain(EXPLANATION_WITH_QUESTION.question);
     expect(html).toContain("Wording adjusted to comply with lending rules.");
+  });
+
+  it("prints the question as its own assistant bubble after the explanation and its footer", async () => {
+    const reply = openReply();
+    vi.stubGlobal("fetch", vi.fn(async () => reply.response));
+    const turn = conversationStore.sendMessage("app_question", "If she adds solar it could come to $40K.");
+    reply.write(
+      OPTIONS_LINE,
+      { ...EXPLANATION_WITH_QUESTION, text: "Option A costs less per month." },
+      { type: "done", event_ids: [] },
+    );
+    reply.close();
+    await turn;
+    const html = panel("app_question");
+    const question = '<div class="bubble assistant question"><p class="reply-text">Use $40,000 as the requested amount?</p></div>';
+    expect(html).toContain(question);
+    expect(count(html, "Use $40,000 as the requested amount?")).toBe(1);
+    // Two assistant bubbles in the exchange; the footer is in the first, before the question.
+    expect(count(html, 'class="bubble assistant')).toBe(2);
+    expect(html.indexOf(`<p class="reply-footer">${FOOTER}</p>`)).toBeLessThan(html.indexOf(question));
+    expect(html.indexOf("Option A costs less per month.")).toBeLessThan(html.indexOf(question));
+  });
+
+  it("prints no question bubble when the reply has none", async () => {
+    const reply = openReply();
+    vi.stubGlobal("fetch", vi.fn(async () => reply.response));
+    const turn = conversationStore.sendMessage("app_no_question", "Explain the options.");
+    reply.write(OPTIONS_LINE, EXPLANATION_LINE, { type: "done", event_ids: [] });
+    reply.close();
+    await turn;
+    expect(count(panel("app_no_question"), 'class="bubble assistant')).toBe(1);
   });
 });
