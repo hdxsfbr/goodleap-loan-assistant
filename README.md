@@ -31,9 +31,10 @@ passes it; the extraction client exists twice (`server/extraction/llm.ts` beside
 and is merged after submission because merging changes the recorded fixture; the no-model button and the
 kill switches were verified from code and tests, not in a browser; every live run during the build went
 through OpenRouter, so the direct Anthropic path (same SDK, no base URL) was not exercised; documents come
-from "Load demo project" or from the file picker, which stands in for the portal's upload; a PDF with no
-text layer is marked for manual reading because the only OCR output is the recorded one for the sample pay
-stub; two of the last live eval turns took 11 to 12
+from "Load demo project" or from the file picker, which stands in for the portal's upload; a scanned PDF
+is read by OCR (tesseract.js, English, one worker in the server process, no confidence threshold), and one
+that OCR finds no words in, or that takes over two minutes, is marked for manual reading; two of the last
+live eval turns took 11 to 12
 seconds, over the 10 s p95 budget, because a judge-triggered regeneration doubled the model calls; the eval
 set has no prompt-injection case; `npm audit` reports three advisories in dependencies (one high) that were
 not addressed; there is no CI, so every number in this README comes from a local run on the date given and
@@ -179,10 +180,10 @@ appears at once.
    Click it and pick a PDF of up to 10 MB (for example `samples/estimate.pdf` and `samples/scope_letter.pdf`).
    Picking another file for the same slot replaces the first until the form is submitted, and a file that is not
    a PDF or is over 10 MB is refused with a message under the slot. After submit the buttons are disabled.
-   `samples/paystub.pdf` is a picture of a pay stub with no text layer: attached this way it has no recorded OCR
-   output, so after submit the reviewer sees it flagged "This document could not be read automatically. Read
-   it on the page." and reads it by hand. **Load demo project** attaches the same pay stub with its recorded
-   OCR output, which is the version with boxes in the steps below.
+   `samples/paystub.pdf` is a picture of a pay stub with no text layer: attached this way it is read by OCR
+   after submit (see "Scanned PDFs" below) and gets boxes like the other documents, net pay included. **Load
+   demo project** attaches the same pay stub with its recorded OCR output instead, and the steps below follow
+   that version, in which net pay deliberately has no box.
 
 10. **Submit.** The form needs a homeowner first name, last name and ZIP code. If you skipped the chat steps,
     click **Load demo project** and type them in (for example Dana, Lee and 94105). On the contractor tab click
@@ -197,7 +198,7 @@ appears at once.
     value you can **Confirm** it, **Correct** it (the box stays as where it was read from) or **Flag** it with
     a fixed reason.
 
-13. **A value that cannot be located.** On the pay stub, **Net pay** shows $1,812.40 with the badge "Not
+13. **A value that cannot be located.** On the pay stub that **Load demo project** attached, **Net pay** shows $1,812.40 with the badge "Not
     located", the words the model quoted and the caption "The value was extracted but its position on the page
     could not be matched. Find it on the page to confirm, correct it, or flag it." There is no box for it.
     Confirm stays disabled until you tick "I located this on the page myself".
@@ -251,12 +252,22 @@ the calculator or the contractor, and a Haiku judge; one block triggers one rewr
 fallback. A field is proposed only with a quote from the contractor's message that the server checks, and the
 contractor confirms it.
 
-**Document extraction.** Each document becomes lines of positioned text (pdf.js for the two text PDFs; a
-committed OCR file for the image pay stub). The model picks a line and a span for each field and quotes it;
-the server checks the quote and draws the box from the document's own word positions. A value is never
-confirmed by the model: a reviewer decides each one, and a value outside tolerance for the stated one opens a
-question to the contractor. The sample documents are synthetic, and the pay stub's word positions were
-produced once by a script.
+**Document extraction.** Each document becomes lines of positioned text (pdf.js for a PDF with a text layer;
+tesseract.js for a PDF without one; a committed OCR file for the sample pay stub that **Load demo project**
+attaches). The model picks a line and a span for each field and quotes it; the server checks the quote and
+draws the box from the document's own word positions. A value is never confirmed by the model: a reviewer
+decides each one, and a value outside tolerance for the stated one opens a question to the contractor. The
+sample documents are synthetic, and the demo pay stub's word positions were produced once by a script.
+
+**Scanned PDFs.** A PDF whose text layer has no words is read by OCR in the server process: each page is drawn
+at 216 dpi (`pdfjs-dist` with `@napi-rs/canvas`) and read by tesseract.js (English). A document that has a text
+layer is never OCR'd. The first scan after `npm install` downloads the English language data once (about 3 MB,
+5 MB on disk) into `data/tessdata/`, which is not committed; after that it works offline. A letter-size page
+took 0.5 to 1.5 seconds on the build machine once the worker was running (starting the worker adds under a
+second), and a slower machine or a dense page takes longer. One document gets 120 seconds in all, after which it
+is marked failed with `extraction.ocr_timeout` and flagged for manual reading, as is a scan in which OCR finds no
+words (`extraction.no_text_layer`). The adapter that read each document is recorded on it and in its
+`extraction.completed` event as `ocr_tesseract`.
 
 ## Operating notes
 

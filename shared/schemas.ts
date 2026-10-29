@@ -66,7 +66,13 @@ export const ExtractionStatusSchema = z.enum([
 ]);
 export type ExtractionStatus = z.infer<typeof ExtractionStatusSchema>;
 
-export const DocumentAdapterSchema = z.enum(["pdfjs", "ocr_fixture"]);
+/**
+ * What read a document: the PDF's text layer (`pdfjs`), the recorded OCR output of the sample pay
+ * stub (`ocr_fixture`), or tesseract.js reading the page pictures of a PDF that has no text layer
+ * (`ocr_tesseract`). A file starts as `pdfjs` or `ocr_fixture`; extraction records the adapter that
+ * actually read it.
+ */
+export const DocumentAdapterSchema = z.enum(["pdfjs", "ocr_fixture", "ocr_tesseract"]);
 export type DocumentAdapter = z.infer<typeof DocumentAdapterSchema>;
 
 export const MatchMethodSchema = z.enum(["exact", "normalized", "not_located", "not_extracted"]);
@@ -105,6 +111,7 @@ export const ErrorCodeSchema = z.enum([
   "extraction.source_not_located",
   "extraction.document_type_mismatch",
   "extraction.no_text_layer",
+  "extraction.ocr_timeout",
   "copilot.disabled",
   "internal",
 ]);
@@ -700,6 +707,8 @@ export const AuditEventSchema = z.discriminatedUnion("type", [
     type: z.literal("extraction.completed"),
     document_id: z.string(),
     extraction_status: ExtractionStatusSchema,
+    /** The adapter that read the document: the one it was attached with, or `ocr_tesseract` when its text layer was empty. */
+    adapter: DocumentAdapterSchema.optional(),
     per_field: z.array(
       obj({
         field_key: z.string(),

@@ -459,6 +459,59 @@ in for the portal's production upload. It does not change what the design descri
   stub through extraction to the review task) and `tests/web-upload.test.ts` (row rules, the card's
   markup, the request the page sends).
 
+### OCR at runtime
+
+On 2026-10-28 the author reversed Alternative P ("OCR at runtime with tesseract.js", rejected earlier the
+same day in favor of the committed fixture) for uploaded files. A PDF the contractor attaches whose text
+layer has no words used to end `failed` with `extraction.no_text_layer`; it is now read by OCR. The
+committed fixture stays for the sample pay stub that "Load demo project" attaches (`ocr_fixture`), so the
+walkthrough and the recorded no-key replay are unchanged. This supersedes the "No text layer" bullet in the
+upload control entry above: the code `extraction.no_text_layer` remains, but it now means that OCR found no
+words either.
+
+* **Dependencies.** `tesseract.js` 7.0.0 and `@napi-rs/canvas` 1.0.13, added to the root `package.json`
+  pinned to those versions (the one-time tooling in `scripts/samples/` already used both). The `canvas`
+  override that blocks the native package stays. pdf.js stays at 4.8.69, which looks for `DOMMatrix`
+  and `Path2D` in the blocked `canvas` package, so the adapter takes them from `@napi-rs/canvas`, and hands
+  pdf.js its own canvas factory through the `CanvasFactory` option of `getDocument` (4.8 has no
+  `canvasFactory` option on `page.render`).
+* **Adapter.** `server/extraction/adapters/ocr-tesseract.ts`, `ocrTesseractAdapter(file, { signal })`:
+  each page is drawn at scale 3 (216 dpi for letter) on a white canvas, PNG-encoded, and read by one
+  tesseract.js worker (English, LSTM engine, page segmentation mode 6) that is created on first use and
+  reused. Words are mapped from tesseract's lines (numbered top to bottom per page, words left to right,
+  boxes as page fractions, confidence divided by 100, empty words dropped). `shutdownOcr()` ends the
+  worker, and so does the process exit hook. Language data goes to `data/tessdata/` (not committed); the
+  adapter fetches the gzip file itself, once, so that an offline first run fails with an error instead of
+  hanging inside the library, and a later call retries.
+* **Selection.** In `extract.ts` an `ocr_fixture` document is read from its recorded file as before; a
+  `pdfjs` document is OCR'd only when pdf.js finds no words in it. The adapter that read the document is
+  written on the document record and on `extraction.completed` (new optional `adapter` field, also
+  `ocr_tesseract` on every `per_field` entry); a failure after OCR started keeps `ocr_tesseract`.
+* **Limits.** OCR runs inside the per-document single flight with a 120 second limit (`ocr_timeout_ms`
+  in the extraction dependencies, for tests). A document that runs out ends `failed` with the new code
+  `extraction.ocr_timeout` (added to the 15 codes, now 16; I chose a code of its own over `internal` so
+  the audit trail says what happened). The abort stops page drawing and, if a page is being read, ends the
+  worker; the next document starts a fresh one. Documents are OCR'd one at a time. The limit covers the OCR
+  stage, not the model call, which keeps its own timeout and retry.
+* **Timing (this machine, warm cache).** Language data 2.95 MB download, 5.2 MB on disk (the task brief
+  estimated 15 MB). Pay stub picture 0.5 s, estimate 0.7 to 1.5 s, scope letter 0.9 s per page with the
+  worker running; the first page after a start takes about 1.0 to 1.3 s. The brief estimated 20 to 40 s
+  per page; that was an order of magnitude too high for these pages, and the README says what was measured.
+  Through the running server, a pay stub upload logged `OCR read doc_1 (pay_stub): 1 page(s), 44 words, 1.0 s`,
+  and the review task opened 17.7 s after submit with three live model calls.
+* **Quality.** The test compares the adapter with `samples/paystub.ocr.json`: all 43 of the recorded words
+  that have a box were found with the same text and a box center within 0.02 (100%; the test requires 90%).
+  The OCR of `estimate.pdf` and `scope_letter.pdf` pictures matches their text layers line for line. One
+  difference from the fixture: net pay now has a box, because the fixture withholds it on purpose and real
+  OCR has it, so an uploaded pay stub shows all seven values located.
+* **Tests.** 636 tests, up from 619. `tests/ocr-tesseract.test.ts` (mapping without the engine; the engine
+  on the pay stub picture, the line grouping, the fixture comparison, a three-page document with a blank
+  page, abort and restart; skips with a printed reason when the language data is absent and cannot be
+  downloaded), the fall-through, no-words, timeout, engine-failure and never-OCR cases in
+  `tests/extract.test.ts`, and an uploaded pay stub through the real adapter to located proposals in
+  `tests/upload.test.ts`. The upload tests that expected `no_text_layer` for the pay stub picture now use a
+  blank page and an OCR reader that finds nothing. `tests/helpers/pdf.ts` writes small PDFs for them.
+
 ## Decisions made during the build
 
 | Date | Decision | Why |
@@ -469,3 +522,5 @@ in for the portal's production upload. It does not change what the design descri
 | 2026-10-28 | An adversarial eval case passes either when a guardrail layer blocks or when the model declines with no verdict word | CUJ 3 already defined both as acceptable; "must trip" would fail a model that behaves well, and the block path is proven by scripted tests |
 | 2026-10-28 | The duplicate extraction client (`server/extraction/llm.ts` beside `server/llm/client.ts`) stays for the submission | Merging it changes the recorded request and therefore the fixture hash on the eve of the deadline; noted as the first cleanup after submission |
 | 2026-10-28 | Values in `.env` override variables already exported by the shell | A stale `ANTHROPIC_BASE_URL` in the demo machine's shell would otherwise send the OpenRouter key to api.anthropic.com and every model call would fail; `.env.example` states the rule |
+| 2026-10-28 | Uploaded PDFs with no text layer are read by tesseract.js at runtime; the committed OCR file stays for the sample pay stub | The author reversed Alternative P for uploads. Measured cost was 3 MB of language data once and about a second per page, not the 15 MB and 10 to 30 s the alternative assumed; the sample pay stub keeps its fixture so the walkthrough and the no-key replay do not vary |
+| 2026-10-28 | OCR timeout is its own code, `extraction.ocr_timeout`, 120 s per document | A timeout that reads as `internal` in the audit trail hides what happened; the code is one enum entry and one message |

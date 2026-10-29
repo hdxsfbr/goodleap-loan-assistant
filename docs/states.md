@@ -104,7 +104,7 @@ A document is attached to one of three slots (`pay_stub`, `estimate`, `scope_let
 | --- | --- | --- |
 | `pending` | Attached; not read yet. | The review task does not exist yet. |
 | `done` | Read; one proposal per field the model answered for. | A row per field, with a box where one could be drawn. |
-| `failed` | The document could not be read, it is a PDF with no text layer (a scan), or the model failed after one retry. | A note: "This document could not be read automatically. Read it on the page." No values. |
+| `failed` | The document could not be read, it is a PDF with no readable text even after OCR (a scan), reading it by OCR took over 120 seconds, or the model failed after one retry. | A note: "This document could not be read automatically. Read it on the page." No values. |
 | `type_mismatch` | The model said the document is not the expected type. | A note that the document does not look like the expected type, so no values were read. |
 | `manual` | Extraction is switched off (`EXTRACTION_ENABLED=false`). | A note: "This document was not read automatically. Read it on the page." No values. |
 
@@ -117,9 +117,14 @@ A document is attached to one of three slots (`pay_stub`, `estimate`, `scope_let
 
 A model failure (`llm.timeout`, `llm.rate_limited`, `llm.server_error`, `llm.schema_invalid`) gets one
 retry; `llm.auth_failed` and `llm.refusal` do not. A wrong document type uses
-`extraction.document_type_mismatch`. A PDF whose text layer holds no words (a scan or a picture) is
-`failed` with `extraction.no_text_layer` before the model is called, so the reviewer reads it by hand;
-the sample pay stub avoids this only through its recorded OCR output, which the demo loader attaches. A value whose quote verified but whose words carry no position
+`extraction.document_type_mismatch`. A PDF whose text layer holds no words (a scan or a picture) is read
+by OCR (tesseract.js) before the model is called, and the document's `adapter` becomes `ocr_tesseract`
+(the adapters are `pdfjs`, `ocr_fixture` and `ocr_tesseract`; a document that has a text layer is never
+OCR'd, and the sample pay stub that the demo loader attaches keeps `ocr_fixture`, its recorded OCR output).
+Only when OCR also finds no words is the document `failed` with `extraction.no_text_layer`, so the reviewer
+reads it by hand; OCR that is not done after 120 seconds ends it `failed` with `extraction.ocr_timeout`, and
+an OCR engine that breaks ends it `failed` with `internal`. In each case the `extraction.completed` event names
+the adapter that read the document. A value whose quote verified but whose words carry no position
 is kept as a proposal with match method `not_located` and the error code
 `extraction.source_not_located`; that is per value, not per document.
 

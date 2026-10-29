@@ -1,5 +1,6 @@
 import { fieldKeyFor, modelFields, parseAsWritten, schemaForSlot } from "@shared/document-schemas/index";
 import type {
+  DocumentAdapter,
   DocumentRecord,
   ErrorCode,
   ExtractionStatus,
@@ -16,6 +17,7 @@ import { openReviewTask } from "../review/tasks.js";
 import { withMock, services } from "../services/index.js";
 import { store } from "../store.js";
 import { readOcrFixture, ocrPathFor } from "./adapters/ocr-fixture.js";
+import { ocrTesseractAdapter, type OcrOptions } from "./adapters/ocr-tesseract.js";
 import { readPdfText } from "./adapters/pdfjs.js";
 import { extractCall, fixtureCaller, type ModelCaller } from "./llm.js";
 import { locate, type Selection } from "./match.js";
@@ -44,6 +46,10 @@ export interface ExtractDeps {
   fixturePath?: string;
   /** Wait before the single retry, in ms. Default 750. */
   retry_delay_ms?: number;
+  /** Replaces the OCR reader of a PDF with no text layer (tests). */
+  ocr?: (file: Uint8Array, options?: OcrOptions) => Promise<PositionedText>;
+  /** The most OCR may take for one document, in ms. Default 120000. */
+  ocr_timeout_ms?: number;
 }
 
 export interface FieldOutcome {
@@ -70,6 +76,9 @@ const RETRYABLE: ReadonlySet<ErrorCode> = new Set([
 
 const DEFAULT_RETRY_DELAY_MS = 750;
 
+/** Reading a scan by OCR is given this long per document, pages and any wait for the engine included. */
+export const OCR_TIMEOUT_MS = 120_000;
+
 /** What a field the model answered with `null` looks like to the matcher. */
 const NOT_FOUND: Selection = {
   value: null,
@@ -85,12 +94,13 @@ export function systemCtx(applicationId: string, sessionId = "system"): Ctx {
   return { application_id: applicationId, session_id: sessionId, actor: { type: "system", id: "system" } };
 }
 
-/**
- * Reads the document into positioned text through its adapter: `pdfjs` reads the text layer of
- * the file the documents service holds, `ocr_fixture` reads the committed OCR output.
- */
-export async function loadPositionedText(ctx: Ctx, doc: DocumentRecord): Promise<PositionedText> {
-  if (doc.adapter === "ocr_fixture") return readOcrFixture(ocrPathFor(doc.file_ref));
+/** The words of a document and the adapter that produced them. */
+interface DocumentRead {
+  text: PositionedText;
+  adapter: DocumentAdapter;
+}
+
+async function fileBytes(ctx: Ctx, doc: DocumentRecord): Promise<Uint8Array> {
   let bytes: Uint8Array = new Uint8Array();
   await withMock(
     ctx,
@@ -103,21 +113,82 @@ export async function loadPositionedText(ctx: Ctx, doc: DocumentRecord): Promise
     },
     { input: { document_id: doc.id } },
   );
-  return readPdfText(bytes);
+  return bytes;
+}
+
+/** OCR with the overall time limit; the reader is told to stop when the limit passes. */
+async function readByOcr(bytes: Uint8Array, deps: Pick<ExtractDeps, "ocr" | "ocr_timeout_ms">): Promise<PositionedText> {
+  const ocr = deps.ocr ?? ocrTesseractAdapter;
+  const controller = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new AppError("extraction.ocr_timeout");
+      controller.abort(error);
+      reject(error);
+    }, deps.ocr_timeout_ms ?? OCR_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([ocr(bytes, { signal: controller.signal }), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Reads the document into positioned text through its adapter: `ocr_fixture` reads the committed
+ * OCR output; `pdfjs` reads the text layer of the file the documents service holds and, only when
+ * that layer has no words at all, reads the page pictures by OCR instead. `used.adapter` is set to
+ * the adapter in use before it runs, so a caller that sees an error knows which adapter failed.
+ */
+async function readDocument(
+  ctx: Ctx,
+  doc: DocumentRecord,
+  deps: Pick<ExtractDeps, "ocr" | "ocr_timeout_ms">,
+  used: { adapter: DocumentAdapter },
+): Promise<DocumentRead> {
+  used.adapter = doc.adapter;
+  if (doc.adapter === "ocr_fixture") {
+    return { text: await readOcrFixture(ocrPathFor(doc.file_ref)), adapter: "ocr_fixture" };
+  }
+  const bytes = await fileBytes(ctx, doc);
+  if (doc.adapter === "pdfjs") {
+    const text = await readPdfText(bytes);
+    // A document that has a text layer is never OCR'd.
+    if (wordCount(text) > 0) return { text, adapter: "pdfjs" };
+  }
+  used.adapter = "ocr_tesseract";
+  const started = Date.now();
+  const text = await readByOcr(bytes, deps);
+  console.log(
+    `OCR read ${doc.id} (${doc.slot}): ${text.pages.length} page(s), ${wordCount(text)} words, ${((Date.now() - started) / 1000).toFixed(1)} s`,
+  );
+  return { text, adapter: "ocr_tesseract" };
+}
+
+/** The positioned text of a document through the adapter it is attached with (OCR for a scan). */
+export async function loadPositionedText(
+  ctx: Ctx,
+  doc: DocumentRecord,
+  deps: Pick<ExtractDeps, "ocr" | "ocr_timeout_ms"> = {},
+): Promise<PositionedText> {
+  return (await readDocument(ctx, doc, deps, { adapter: doc.adapter })).text;
 }
 
 function finish(
   ctx: Ctx,
   doc: DocumentRecord,
+  adapter: DocumentAdapter,
   status: ExtractionStatus,
   fields: FieldOutcome[],
   errorCode?: ErrorCode,
 ): ExtractionOutcome {
   setExtractionStatus(ctx, doc.id, status, {
+    adapter,
     per_field: fields.map((f) => ({
       field_key: f.field_key,
       match_method: f.match_method,
-      adapter: doc.adapter,
+      adapter,
       ...(f.rejected_pointer ? { rejected_pointer: true } : {}),
       ...(f.parse_error === null ? {} : { parse_error: f.parse_error }),
     })),
@@ -153,16 +224,19 @@ async function runExtraction(ctx: Ctx, documentId: string, deps: ExtractDeps): P
   const schema = schemaForSlot(doc.slot);
 
   let text: PositionedText;
+  let adapter: DocumentAdapter = doc.adapter;
+  const used = { adapter: doc.adapter };
   try {
-    text = await loadPositionedText(ctx, doc);
+    ({ text, adapter } = await readDocument(ctx, doc, deps, used));
   } catch (err) {
     console.error(`Extraction could not read ${doc.id}:`, err instanceof Error ? err.message : err);
-    return finish(ctx, doc, "failed", [], "internal");
+    const code: ErrorCode = err instanceof AppError && err.code === "extraction.ocr_timeout" ? err.code : "internal";
+    return finish(ctx, doc, used.adapter, "failed", [], code);
   }
   if (wordCount(text) === 0) {
-    // A scan or a picture inside a PDF: the text layer is empty, so there is nothing to select
-    // from. The model is not called; the reviewer reads the page.
-    return finish(ctx, doc, "failed", [], doc.adapter === "pdfjs" ? "extraction.no_text_layer" : "internal");
+    // A scan or a picture that OCR also found no words in: there is nothing to select from. The
+    // model is not called; the reviewer reads the page.
+    return finish(ctx, doc, adapter, "failed", [], adapter === "ocr_tesseract" ? "extraction.no_text_layer" : "internal");
   }
 
   const request = buildExtractionRequest(schema, text);
@@ -192,10 +266,10 @@ async function runExtraction(ctx: Ctx, documentId: string, deps: ExtractDeps): P
     }
     if (output === undefined && attempt < attempts) await sleep(deps.retry_delay_ms ?? DEFAULT_RETRY_DELAY_MS);
   }
-  if (output === undefined || modelEventId === undefined) return finish(ctx, doc, "failed", [], failure);
+  if (output === undefined || modelEventId === undefined) return finish(ctx, doc, adapter, "failed", [], failure);
 
   if (!output.document_matches_slot) {
-    return finish(ctx, doc, "type_mismatch", [], "extraction.document_type_mismatch");
+    return finish(ctx, doc, adapter, "type_mismatch", [], "extraction.document_type_mismatch");
   }
 
   const modelCtx: Ctx = {
@@ -247,7 +321,7 @@ async function runExtraction(ctx: Ctx, documentId: string, deps: ExtractDeps): P
     });
     fields.push({ field_key: key, match_method: method, rejected_pointer: rejected, parse_error: parseError });
   }
-  return finish(ctx, doc, "done", fields);
+  return finish(ctx, doc, adapter, "done", fields);
 }
 
 /**

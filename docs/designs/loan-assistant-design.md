@@ -178,8 +178,10 @@ already records reviewed income (both named in Technical Plan section 3).
 *   The contractor reviewing or correcting extraction results. Review is internal.
 *   Upload through the chat. Form upload only.
 *   Voice input or output.
-*   OCR at runtime. Positioned text (every word on a page with its position) for the image sample
-    is computed once and committed; AWS Textract is the production path.
+*   OCR at runtime for the sample pay stub. Positioned text (every word on a page with its position)
+    for the image sample is computed once and committed; AWS Textract is the production path.
+    (A file the contractor uploads is the exception: a PDF with no text layer is read by tesseract.js
+    at runtime, by decision of 2026-10-28; see Alternative P.)
 *   Real integrations with Plaid, the credit decision engine, Jira Service Management, Zapier,
     Snowflake or Microsoft 365. All are mocked behind typed interfaces or described only.
 *   Zapier in the critical path of the review hand-off. The backend creates the review task;
@@ -467,7 +469,7 @@ are not stored on the task; they are the `field.*` audit events carrying `review
 the task view derives its decision list from them.
 
 **Document**: `id`, `application_id`, `slot` (`pay_stub | estimate | scope_letter`), `file_ref`,
-`pages` (count, width, height), `positioned_text_ref`, `adapter` (`pdfjs | ocr_fixture`),
+`pages` (count, width, height), `positioned_text_ref`, `adapter` (`pdfjs | ocr_fixture | ocr_tesseract`),
 `extraction_status` (`pending | done | failed | type_mismatch | manual`, the last set when
 extraction is disabled). A slot that fails or mismatches is recorded here; the review task becomes `ready` once every slot is `done`, `failed` or
 `type_mismatch`, shows the failed slots as flags for manual reading, and is `extraction_failed`
@@ -641,7 +643,8 @@ so every later comparison runs against confirmed values.
     the prototype an in-process queue runs the same consumer code the production SQS consumer
     would.
 2.  The consumer picks the positioned-text adapter by document (`pdfjs` for the text PDFs,
-    `ocr_fixture` for the image pay stub) and both produce `PositionedText`: pages of words in
+    `ocr_fixture` for the sample image pay stub, and `ocr_tesseract` for an uploaded PDF whose text
+    layer has no words, decided when it is read) and all produce `PositionedText`: pages of words in
     reading order, each with text, a box in page-relative fractions with a top-left origin, and
     confidence. In production the Textract adapter produces the same shape. The adapters are
     specified in plan items 40 and 41.
@@ -833,7 +836,8 @@ feature 2 ships as design-only; there is no reduced-depth substitute.
 | `guardrail.judge_unavailable` | copilot | Fail closed on prose: fallback text, distinct outcome code |
 | `catalog.unavailable`, `catalog.schema_mismatch` | calculator | No options rendered; message names the service; `catalog.schema_mismatch` is a metric that must read zero |
 | `extraction.source_not_located` | extraction | Per value, not per document: proposal kept with quoted text; reviewer path in CUJ 4 |
-| `extraction.no_text_layer` | extraction | A PDF with no text layer (a scan): the model is not called, the document's `extraction_status` is `failed`, and the slot is flagged for manual reading (production sends such files to Textract) |
+| `extraction.no_text_layer` | extraction | A PDF with no readable text even after OCR (a scan tesseract.js finds no words in): the model is not called, the document's `extraction_status` is `failed`, and the slot is flagged for manual reading (production sends such files to Textract) |
+| `extraction.ocr_timeout` | extraction | OCR of a PDF with no text layer did not finish in 120 seconds: the OCR worker is ended, the model is not called, the document's `extraction_status` is `failed`, and the slot is flagged for manual reading |
 | `extraction.document_type_mismatch` | extraction | The document's `extraction_status` is `type_mismatch`; the task is created without proposals for that slot and the reviewer sees the flag `wrong_document_type` |
 | `llm.auth_failed` | copilot, extraction | The key is present but rejected: the banner names the variable; the chat input is disabled with the same message; not retryable |
 | `copilot.disabled` | copilot | `COPILOT_ENABLED` is false: the panel renders "disabled by operator" |
@@ -1181,6 +1185,21 @@ instead.
     output, threatens the 5-minute rule and makes the walkthrough's values vary between runs.
 *   **Decision**: Positioned text for the image sample is computed once and
     committed; AWS Textract is the production path through the same adapter shape.
+*   **Build note (2026-10-28), reversed for uploads**: the author reversed this decision for files
+    the contractor uploads. A PDF whose text layer yields no words is now read by tesseract.js at
+    runtime (`server/extraction/adapters/ocr-tesseract.ts`); before this, such a file ended `failed`
+    with `extraction.no_text_layer`. The committed OCR file stays for the sample pay stub that
+    "Load demo project" attaches (adapter `ocr_fixture`), so the walkthrough's values do not vary
+    between runs, and the recorded no-key replay is untouched. The measured costs were smaller than
+    estimated above: the English language data is a 2.9 MB download (5.2 MB on disk, fetched once into
+    `data/tessdata/`, which is not committed) rather than 15 MB, and a letter-size page took 0.5 to 1.5
+    seconds on the build machine rather than 10 to 30. The remaining costs are real and are handled:
+    the output is not deterministic across engine versions (the adapter is compared against the
+    committed OCR file by `tests/ocr-tesseract.test.ts`, which found all 43 located words within 0.02
+    of the recorded centers); one worker thread lives in the server process; and OCR gets 120 seconds
+    per document, after which the document is `failed` with `extraction.ocr_timeout` and the worker is
+    ended. Dependencies added to the root install: `tesseract.js` 7.0.0 and `@napi-rs/canvas` 1.0.13
+    (a prebuilt binary; the `canvas` override that blocks the native package stays).
 
 #### Alternative Q: A broad deny-list ("approved", "free", "no interest")
 
@@ -1582,7 +1601,7 @@ template (item 32) and is the single source for prompts, tests and the submissio
         not_located | not_extracted`; `rejected_pointer?: boolean`), `DiscrepancyRecord` (with
         `sent_at?`), `ReviewTask` (`status`: `ready | in_review | complete | extraction_failed`;
         `created_at`), `DocumentRecord` (`extraction_status`: `pending | done | failed |
-        type_mismatch | manual`; `adapter`: `pdfjs | ocr_fixture`), `DocumentSlot`,
+        type_mismatch | manual`; `adapter`: `pdfjs | ocr_fixture | ocr_tesseract`), `DocumentSlot`,
         `OptionsRecord` (`inputs_source: { amount: "form" | "argument", term: "form" | "argument"
         | "catalog" }`), `PaymentOption` (`label` "Option A" to "Option C" by catalog order,
         `product_id`, `product_name`, `mechanic`, `term_months`, `apr_bps`, `payment_cents`,
@@ -1597,7 +1616,8 @@ template (item 32) and is the single source for prompts, tests and the submissio
         `ErrorCode` (`llm.missing_key`, `llm.auth_failed`, `llm.timeout`, `llm.rate_limited`,
         `llm.server_error`, `llm.refusal`, `llm.schema_invalid`, `guardrail.judge_unavailable`,
         `catalog.unavailable`, `catalog.schema_mismatch`, `extraction.source_not_located`,
-        `extraction.document_type_mismatch`, `extraction.no_text_layer`, `copilot.disabled`, `internal`).
+        `extraction.document_type_mismatch`, `extraction.no_text_layer`, `extraction.ocr_timeout`,
+        `copilot.disabled`, `internal`).
     *   `AuditEvent`: a `z.discriminatedUnion` on `type` with the base fields merged in
         (`schema_version: 1`), every type from Technical Plan section 3 including
         `message.received`, `review.task_created`, `discrepancy.sent`, and `model.call` with
@@ -2160,6 +2180,17 @@ template (item 32) and is the single source for prompts, tests and the submissio
     }] }` in page pixels; converts pixel boxes to fractions, keeps `line` from the file and sets
     `index` from word order, and returns `PositionedText`. A comment names the production
     replacement (Textract WORD and LINE blocks through the same shape).
+*   **Build note (2026-10-28)**: this adapter now serves only the sample pay stub and the no-key
+    replay. An uploaded PDF whose text layer yields no words falls through to
+    `server/extraction/adapters/ocr-tesseract.ts` (`ocrTesseractAdapter(file)`), which draws each
+    page at scale 3 with pdf.js and `@napi-rs/canvas`, reads it with a tesseract.js worker (page
+    segmentation mode 6, so a table row stays on one line) and returns the same `PositionedText`:
+    tesseract's lines numbered top to bottom per page, words left to right, boxes as page fractions,
+    confidence divided by 100, words with no text dropped. Unlike the fixture, it gives net pay its
+    box, because real OCR has the geometry the fixture withholds on purpose. `extractDocument` records
+    the adapter that actually read the document (`ocr_tesseract`) on the document and in
+    `extraction.completed`. A document that has a text layer is never OCR'd. This reverses Alternative P
+    for uploads.
 
 ##### 42. `server/extraction/match.ts` (Create)
 

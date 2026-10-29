@@ -70,3 +70,12 @@ the actuarial APR, the product range and the contractor-question split, each wit
 2026-10-28 19:43 : `npm run build` exit 0; `npm test` 26 files, 619 tests passed, 0 failed (31 new tests cover the
 upload route, the replace rule, the no-text-layer rule and the slot controls). The restyle added no
 tests and changed none.
+
+## After the runtime OCR adapter
+
+2026-10-28 20:07 : `npm run build` exit 0; `npm test` 27 files, 636 tests passed, 0 failed. The OCR test reads the
+sample pay stub picture with tesseract.js and matched 43 of 43 of the committed fixture's located words
+within 0.02 of their box centers; it takes about 3 s warm and skips with a printed reason when the
+language data is absent and cannot be downloaded. A live submit with three plain uploads produced a
+review task 17.7 s after submit with the pay stub read by OCR (adapter `ocr_tesseract`, 7 values
+located with boxes).

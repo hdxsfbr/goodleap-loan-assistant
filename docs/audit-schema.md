@@ -299,6 +299,7 @@ Emitted by `setExtractionStatus`.
 | --- | --- | --- | --- |
 | `document_id` | string | yes | - |
 | `extraction_status` | `pending` \| `done` \| `failed` \| `type_mismatch` \| `manual` | yes | - |
+| `adapter` | `pdfjs` \| `ocr_fixture` \| `ocr_tesseract`: the adapter that read the document. A file attached as `pdfjs` whose text layer had no words is read by `ocr_tesseract`, and the document record then carries it too | no | - |
 | `per_field` | list of `{ field_key, match_method, adapter, rejected_pointer?, parse_error? }` | yes | - |
 | `error_code` | an error code | no | - |
 

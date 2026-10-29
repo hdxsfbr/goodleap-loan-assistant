@@ -55,7 +55,8 @@ The internal design, section 10, places each piece on GoodLeap's stack. In short
 * The in-memory store becomes four RDS tables (proposals, discrepancies, review tasks, audit
   events) written only through the same commands; the audit table is INSERT-only.
 * Large artifacts (raw prompts, rendered views) move to one S3 prefix and are referenced by key.
-* Extraction runs in an SQS consumer; the image adapter becomes AWS Textract behind the same
+* Extraction runs in an SQS consumer; the image adapter (tesseract.js in the prototype, which reads
+  a PDF with no text layer inside the server process) becomes AWS Textract behind the same
   positioned-text interface; the committed OCR file is only for the sample pay stub.
 * The typed mocks (catalog, contractor profile, documents, review queue) become clients of the
   real services; the credit decision engine stays uncalled. The review queue mock becomes the Jira

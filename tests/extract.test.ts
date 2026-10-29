@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { completeReview, submitApplication } from "../server/commands.js";
+import { attachDocument, completeReview, submitApplication } from "../server/commands.js";
 import { audit } from "../server/audit-log.js";
 import { AppError } from "../server/errors.js";
+import { ocrPathFor, readOcrFixture } from "../server/extraction/adapters/ocr-fixture.js";
 import { enqueueExtraction, extractDocument, openReviewTask, startDocumentReview } from "../server/extraction/extract.js";
+import type { PositionedText } from "../server/extraction/positioned-text.js";
 import { taskView } from "../server/review/tasks.js";
 import type { ModelCaller } from "../server/extraction/llm.js";
 import { services } from "../server/services/index.js";
@@ -434,5 +436,125 @@ describe("work that overlaps or is retried", () => {
     await expect(openReviewTask(system, APP, { manual: false })).rejects.toThrow(/every document has been read/);
     expect(queueMethods()).toEqual([]);
     expect(store.listReviewTasks(APP)).toEqual([]);
+  });
+});
+
+describe("a document whose text layer has no words", () => {
+  let pictureId = "";
+  beforeEach(() => {
+    // The pay stub sample is a picture; attached with the text adapter it has to be read by OCR.
+    freshWorld({ slots: ["estimate", "scope_letter"], submit: false });
+    pictureId = attachDocument(contractor, "pay_stub", "samples/paystub.pdf", "pdfjs").document.id;
+    submitApplication(contractor);
+  });
+
+  /** An OCR reader that answers with the committed OCR output of the pay stub. */
+  const recordedOcr = () => vi.fn(async (_file: Uint8Array, _options?: { signal?: AbortSignal }) => readOcrFixture(ocrPathFor("samples/paystub.pdf")));
+  const emptyPage: PositionedText = { pages: [{ page: 1, width: 1, height: 1, words: [] }] };
+
+  it("is read by OCR, and the document and the completion event record the adapter that read it", async () => {
+    const ocr = recordedOcr();
+    const call = vi.fn(goodCaller());
+    const outcome = await extractDocument(system, pictureId, { call, ocr, ...fast });
+
+    expect(ocr).toHaveBeenCalledTimes(1);
+    expect(new TextDecoder().decode(ocr.mock.calls[0]?.[0].subarray(0, 5))).toBe("%PDF-");
+    expect(ocr.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ extraction_status: "done", error_code: null });
+    expect(store.getDocument(pictureId)).toMatchObject({ adapter: "ocr_tesseract", extraction_status: "done" });
+
+    const done = eventsOf("extraction.completed")[0] as { adapter: string; per_field: Array<{ adapter: string }> };
+    expect(done.adapter).toBe("ocr_tesseract");
+    expect(done.per_field).toHaveLength(7);
+    expect(done.per_field.every((f) => f.adapter === "ocr_tesseract")).toBe(true);
+    expect(proposalFor("pay_stub.gross_pay")).toMatchObject({ value: 235000, match: { method: "exact" } });
+  });
+
+  it("ends failed with extraction.no_text_layer, without calling the model, when OCR finds no words either", async () => {
+    const ocr = vi.fn(async () => emptyPage);
+    const call = vi.fn(goodCaller());
+    const outcome = await extractDocument(system, pictureId, { call, ocr, ...fast });
+
+    expect(call).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ extraction_status: "failed", error_code: "extraction.no_text_layer" });
+    expect(store.getDocument(pictureId)).toMatchObject({ adapter: "ocr_tesseract", extraction_status: "failed" });
+    expect(eventsOf("extraction.completed")[0]).toMatchObject({
+      adapter: "ocr_tesseract",
+      error_code: "extraction.no_text_layer",
+      per_field: [],
+    });
+    expect(store.listProposals(APP)).toEqual([]);
+  });
+
+  it("ends failed with extraction.ocr_timeout when OCR runs past its limit, and tells the reader to stop", async () => {
+    let signal: AbortSignal | undefined;
+    const ocr = vi.fn((_file: Uint8Array, options?: { signal?: AbortSignal }) => {
+      signal = options?.signal;
+      return new Promise<PositionedText>(() => undefined); // never answers
+    });
+    const call = vi.fn(goodCaller());
+    const started = Date.now();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let outcome;
+    try {
+      outcome = await extractDocument(system, pictureId, { call, ocr, ocr_timeout_ms: 40, ...fast });
+    } finally {
+      errors.mockRestore();
+    }
+
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(signal?.aborted).toBe(true);
+    expect(call).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ extraction_status: "failed", error_code: "extraction.ocr_timeout" });
+    expect(store.getDocument(pictureId)).toMatchObject({ adapter: "ocr_tesseract", extraction_status: "failed" });
+    expect(eventsOf("extraction.completed")[0]).toMatchObject({ error_code: "extraction.ocr_timeout", per_field: [] });
+  });
+
+  it("gives the reader the whole limit: a slow read that finishes in time is used", async () => {
+    const ocr = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return readOcrFixture(ocrPathFor("samples/paystub.pdf"));
+    });
+    const outcome = await extractDocument(system, pictureId, { call: goodCaller(), ocr, ocr_timeout_ms: 2000, ...fast });
+    expect(outcome.extraction_status).toBe("done");
+  });
+
+  it("ends failed with internal when the OCR engine breaks", async () => {
+    const ocr = vi.fn(async (): Promise<PositionedText> => {
+      throw new Error("The OCR language data download failed with status 503.");
+    });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const outcome = await extractDocument(system, pictureId, { call: goodCaller(), ocr, ...fast });
+      expect(outcome).toMatchObject({ extraction_status: "failed", error_code: "internal" });
+      expect(store.getDocument(pictureId)).toMatchObject({ adapter: "ocr_tesseract" });
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("never OCRs a document that has a text layer", async () => {
+    const ocr = vi.fn(async (): Promise<PositionedText> => {
+      throw new Error("OCR must not run.");
+    });
+    const estimate = store.listDocuments(APP).find((d) => d.slot === "estimate");
+    const outcome = await extractDocument(system, estimate?.id ?? "", { call: goodCaller(), ocr, ...fast });
+    expect(ocr).not.toHaveBeenCalled();
+    expect(outcome.extraction_status).toBe("done");
+    expect(store.getDocument(estimate?.id ?? "")?.adapter).toBe("pdfjs");
+    expect(eventsOf("extraction.completed")[0]).toMatchObject({ adapter: "pdfjs" });
+  });
+
+  it("never OCRs the sample pay stub, which keeps its recorded OCR output", async () => {
+    const ocr = vi.fn(async (): Promise<PositionedText> => {
+      throw new Error("OCR must not run.");
+    });
+    world = freshWorld();
+    const outcome = await extractDocument(system, world.docs.pay_stub?.id ?? "", { call: goodCaller(), ocr, ...fast });
+    expect(ocr).not.toHaveBeenCalled();
+    expect(outcome.extraction_status).toBe("done");
+    expect(store.getDocument(world.docs.pay_stub?.id ?? "")?.adapter).toBe("ocr_fixture");
+    expect(eventsOf("extraction.completed")[0]).toMatchObject({ adapter: "ocr_fixture" });
   });
 });

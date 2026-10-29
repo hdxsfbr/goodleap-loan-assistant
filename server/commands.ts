@@ -858,6 +858,8 @@ export function setExtractionStatus(
       parse_error?: string;
     }>;
     error_code?: ErrorCode;
+    /** The adapter that read the document, when it is not the one the document was attached with. */
+    adapter?: DocumentAdapter;
   } = {},
 ): { event_id: string } {
   requireApplication(ctx);
@@ -875,11 +877,13 @@ export function setExtractionStatus(
     compact({
       document_id,
       extraction_status: status,
+      adapter: detail.adapter ?? document.adapter,
       per_field: detail.per_field ?? [],
       error_code: detail.error_code,
     }),
   );
   document.extraction_status = status;
+  if (detail.adapter !== undefined) document.adapter = detail.adapter;
   return { event_id: event.event_id };
 }
 

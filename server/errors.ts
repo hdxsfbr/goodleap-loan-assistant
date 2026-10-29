@@ -78,9 +78,14 @@ const ERROR_TABLE: Record<ErrorCode, ErrorSpec> = {
     status: 422,
   },
   "extraction.no_text_layer": {
-    message: "This PDF has no readable text layer, so it is marked for manual reading.",
+    message: "This PDF has no readable text, even after OCR, so it is marked for manual reading.",
     retryable: false,
     status: 422,
+  },
+  "extraction.ocr_timeout": {
+    message: "Reading this scan took too long, so it is marked for manual reading.",
+    retryable: false,
+    status: 504,
   },
   "copilot.disabled": {
     message: "The assistant is disabled by operator.",
